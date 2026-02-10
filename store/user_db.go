@@ -23,6 +23,12 @@ type UserDbStore struct {
 	db *sql.DB
 }
 
+func NewUserDbStore(db *sql.DB) *UserDbStore {
+	return &UserDbStore{
+		db: db,
+	}
+}
+
 func (s *UserDbStore) Save(user *types.User) error {
 	result, err := s.db.Exec(InsertUserSql, user.Id, user.Email, user.Name, user.Password, user.IsValid, user.CreateAt, user.BirthAt, user.UpdateAt, user.Sex)
 	if err != nil {

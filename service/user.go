@@ -52,7 +52,7 @@ func (s *defaultUserService) LoginByPassword(userId string, password string) (st
 		return "", err
 	}
 	if user.Password != password {
-		slog.Error("password incorrect, user: %+v", user)
+		slog.Error("password incorrect, user ", user)
 		return "", errors.New("password incorrect")
 	}
 

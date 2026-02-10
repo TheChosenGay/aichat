@@ -27,7 +27,8 @@ type UserServer struct {
 
 func NewUserServer(userSrv service.UserService, opt UserServerOpt, opts ...UserServerOption) *UserServer {
 	u := &UserServer{
-		opt: &opt,
+		userService: userSrv,
+		opt:         &opt,
 	}
 
 	for _, o := range opts {

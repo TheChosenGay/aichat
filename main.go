@@ -6,6 +6,7 @@ import (
 
 	"github.com/TheChosenGay/aichat/api"
 	"github.com/TheChosenGay/aichat/service"
+	"github.com/TheChosenGay/aichat/store"
 	"github.com/joho/godotenv"
 )
 
@@ -19,9 +20,15 @@ func main() {
 	userServicePort := os.Getenv("USER_SERVICE_LISTEN_PORT")
 	slog.Info("User service port", "port", userServicePort)
 	// user server
-	// userDbStore := store.NewUserDbStore(db)
-	// userRedisStore := store.NewUserRedisStore(redis)
-	userSrv := service.NewUserService(nil, nil)
+	userDbStore := store.NewUserDbStore(store.NewMysqlInstance())
+	userRedisStore := store.NewUserRedisStore(
+		store.WithRedisClientName("user_service"),
+		store.WithRedisDB(1),
+		store.WithRedisAddr(os.Getenv("REDIS_ADDR")),
+	)
+
+	userSrv := service.NewUserService(userDbStore, userRedisStore)
+
 	us := api.NewUserServer(userSrv, api.UserServerOpt{
 		ListenPort: userServicePort,
 	})

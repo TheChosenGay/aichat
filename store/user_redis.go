@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"os"
 	"strconv"
 	"time"
 
@@ -10,14 +11,76 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type UserRedisStoreConfig struct {
+	Addr       string
+	Password   string
+	DB         int
+	Protocol   int
+	ClientName string // 设置客户端名称
+}
+
+func NewUserRedisStoreConfig() UserRedisStoreConfig {
+	db, err := strconv.Atoi(os.Getenv("REDIS_USER_DB"))
+	if err != nil {
+		db = 0
+	}
+	protocol, err := strconv.Atoi(os.Getenv("REDIS_PROTOCOL"))
+	if err != nil {
+		protocol = 0
+	}
+	return UserRedisStoreConfig{
+		Addr:       os.Getenv("REDIS_ADDR"),
+		Password:   os.Getenv("REDIS_PASSWORD"),
+		DB:         db,
+		Protocol:   protocol,
+		ClientName: os.Getenv("REDIS_CLIENT_NAME"),
+	}
+}
+
+func WithRedisAddr(addr string) UserRedisStoreOptFunc {
+	return func(config UserRedisStoreConfig) UserRedisStoreConfig {
+		config.Addr = addr
+		return config
+	}
+}
+
+func WithRedisDB(db int) UserRedisStoreOptFunc {
+	return func(config UserRedisStoreConfig) UserRedisStoreConfig {
+		config.DB = db
+		return config
+	}
+}
+
+func WithRedisClientName(clientName string) UserRedisStoreOptFunc {
+	return func(config UserRedisStoreConfig) UserRedisStoreConfig {
+		config.ClientName = clientName
+		return config
+	}
+}
+
+type UserRedisStoreOptFunc func(config UserRedisStoreConfig) UserRedisStoreConfig
+
 type UserRedisStore struct {
 	redis *redis.Client
 }
 
-func NewUserRedisStore(redis *redis.Client) *UserRedisStore {
-	return &UserRedisStore{
-		redis: redis,
+func NewUserRedisStore(opts ...UserRedisStoreOptFunc) *UserRedisStore {
+	config := NewUserRedisStoreConfig()
+	for _, opt := range opts {
+		config = opt(config)
 	}
+
+	r := redis.NewClient(&redis.Options{
+		Addr:       config.Addr,
+		ClientName: config.ClientName,
+		Password:   config.Password,
+		DB:         config.DB,
+		Protocol:   config.Protocol,
+	})
+	us := &UserRedisStore{
+		redis: r,
+	}
+	return us
 }
 
 func (s *UserRedisStore) SaveJwt(userId string, cert string, secret string) error {
