@@ -13,7 +13,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		slog.Error("Failed to load .env file, error: %v", err)
+		slog.Error("Failed to load .env file, error", err)
 		return
 	}
 

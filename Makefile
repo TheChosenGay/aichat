@@ -3,6 +3,9 @@ build:
 
 run: build
 	@./bin/aichat
+	
+migrate:
+	@migrate create -ext sql -dir store/migrations -seq $(name)
 
 test:
 	@go test -v ./...
