@@ -3,14 +3,16 @@ package utils
 import (
 	"errors"
 
+	"github.com/TheChosenGay/aichat/types"
 	jwt "github.com/golang-jwt/jwt/v5"
 )
 
-func GenerateJwt(userId string, secret string) (string, error) {
+func GenerateJwt(user *types.User, secret string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userId": userId,
+		"userId": user.Id,
+		"email":  user.Email,
 	})
 	// Sign and get the complete encoded token as a string using the secret
 	tokenString, err := token.SignedString([]byte(secret))
@@ -21,15 +23,15 @@ func GenerateJwt(userId string, secret string) (string, error) {
 	return tokenString, nil
 }
 
-func VerifyJwt(userId string, jwtToken string, secret string) (bool, error) {
+func VerifyJwt(email string, jwtToken string, secret string) (bool, error) {
 	token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
 	if err != nil {
 		return false, err
 	}
-	userIdClaim := token.Claims.(jwt.MapClaims)["userId"]
-	if userIdClaim != userId {
+	emailClaim := token.Claims.(jwt.MapClaims)["email"]
+	if emailClaim != email {
 		return false, errors.New("user id mismatch")
 	}
 

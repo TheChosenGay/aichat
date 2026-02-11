@@ -83,8 +83,8 @@ func NewUserRedisStore(opts ...UserRedisStoreOptFunc) *UserRedisStore {
 	return us
 }
 
-func (s *UserRedisStore) SaveJwt(userId string, cert string, secret string) error {
-	key := "user:jwt:" + userId
+func (s *UserRedisStore) SaveJwt(email string, cert string, secret string) error {
+	key := "user:jwt:" + email
 	fields := map[string]interface{}{
 		"cert":   cert,
 		"secret": secret,
@@ -99,8 +99,8 @@ func (s *UserRedisStore) SaveJwt(userId string, cert string, secret string) erro
 	return nil
 }
 
-func (s *UserRedisStore) GetJwt(userId string) (string, string, error) {
-	key := "user:jwt:" + userId
+func (s *UserRedisStore) GetJwt(email string) (string, string, error) {
+	key := "user:jwt:" + email
 	result, err := s.redis.HGetAll(context.Background(), key).Result()
 	if err != nil {
 		return "", "", err

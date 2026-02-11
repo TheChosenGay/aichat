@@ -52,12 +52,12 @@ func (s *defaultUserService) LoginByPassword(userId string, password string) (st
 		return "", err
 	}
 	if user.Password != password {
-		slog.Error("password incorrect, user ", user)
+		slog.Error("password incorrect", "login  by password err: ", user)
 		return "", errors.New("password incorrect")
 	}
 
 	secret := strconv.Itoa(rand.Int()) + strconv.FormatInt(time.Now().UnixNano(), 10)
-	jwtToken, err := utils.GenerateJwt(user.Id, secret)
+	jwtToken, err := utils.GenerateJwt(user, secret)
 
 	if err != nil {
 		slog.Error("failed to generate jwt token", "error", err.Error())
