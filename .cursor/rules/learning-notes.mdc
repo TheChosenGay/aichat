@@ -1,0 +1,61 @@
+---
+description: 学习笔记规范 — 每完成一个 Week 后记录在 docs/notes/ 下
+alwaysApply: true
+---
+
+# 学习笔记规范
+
+## 目录结构
+```
+docs/
+├── notes/
+│   ├── week01-websocket.md
+│   ├── week02-security.md
+│   └── ...
+├── adr/                    # Architecture Decision Records（架构决策记录）
+│   └── 001-redis-hash-for-user.md
+└── api.md                  # HTTP + WS 接口文档
+```
+
+## 每周笔记模板
+每完成一个 Week，在 `docs/notes/` 创建对应文件：
+
+```markdown
+# Week N — 主题
+
+## 学到了什么
+- 核心概念 1（用自己的话解释）
+- 核心概念 2
+
+## 写了什么代码
+- 文件：做了什么
+
+## 踩过的坑
+- 坑：原因 + 解决方案
+
+## 下次要注意
+- ...
+```
+
+## 架构决策记录（ADR）模板
+当做了重要的技术选型时，记录在 `docs/adr/` 下：
+
+```markdown
+# ADR-NNN: 标题
+
+## 背景
+为什么需要做这个决策
+
+## 决策
+选择了什么方案
+
+## 理由
+为什么不选其他方案
+
+## 后果
+这个选择带来的影响
+```
+
+## 提示
+- 遇到问题时告诉 AI "帮我更新学习笔记"，AI 会根据对话内容自动整理
+- 每周结束时可以问 AI "帮我 review 本周代码，有没有需要改进的地方"

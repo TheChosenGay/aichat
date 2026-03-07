@@ -1,0 +1,56 @@
+---
+description: aichat 项目 Go 编码规范 — 分层职责、错误处理、并发、日志
+globs: **/*.go
+alwaysApply: false
+---
+
+# Go 编码规范
+
+## 分层职责
+| 层 | 职责 | 禁止 |
+|----|------|------|
+| `api/` | 解析请求、参数校验、调用 service、写响应 | 直接操作 DB/Redis |
+| `service/` | 业务逻辑、编排 store 调用 | 直接写 HTTP 响应 |
+| `store/` | 纯数据读写，无业务判断 | 调用其他 service |
+| `types/` | 纯数据结构 + 构造函数 | 无任何逻辑 |
+| `gateway/` | 长连接管理，消息收发路由 | 直接写数据库 |
+
+## 错误处理
+```go
+// ✅ service 层用 service.NewError 包装
+if err := s.dbStore.Save(user); err != nil {
+    return service.NewError(service.ErrServiceUser, service.ErrUserCreate, err)
+}
+
+// ✅ api 层根据错误类型返回合适的 HTTP 状态码
+http.Error(w, err.String(), http.StatusInternalServerError)
+
+// ❌ 不要直接 panic（store/mysql.go 的 panic 是启动阶段的特例）
+```
+
+## 并发安全
+- `ConnManager` 用 `sync.RWMutex`：读多写少场景用 `RLock/RUnlock`
+- goroutine 内不要直接写共享 map，通过 ConnManager 方法操作
+- service 层实现类无共享可变状态，无需加锁
+
+## 日志
+```go
+// 使用 log/slog，统一结构化日志
+slog.Info("描述", "key", value)
+slog.Error("描述", "error", err)
+slog.Warn("描述", "key", value)
+// ❌ 不用 fmt.Println / log.Printf
+```
+
+## Redis Key 命名规范
+```
+user:{userId}          # Hash，用户基本信息
+user:jwt:{email}       # Hash，cert + secret 字段
+online:{userId}        # String，在线状态（EX 60）
+agent:memory:{userId}  # List，对话历史
+```
+
+## MySQL 迁移
+- 迁移文件放 `store/migrations/`，用 golang-migrate 管理
+- 命名：`{seq}_{描述}.up.sql` / `{seq}_{描述}.down.sql`
+- `make migrate NAME=xxx` 创建新迁移文件

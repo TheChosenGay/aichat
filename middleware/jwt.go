@@ -1,32 +1,34 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
-	"github.com/TheChosenGay/aichat/store"
 	"github.com/TheChosenGay/aichat/utils"
 )
 
 type HttpFunc func(w http.ResponseWriter, r *http.Request)
 
-func JwtMiddleware(next HttpFunc, redisStore *store.UserRedisStore) HttpFunc {
+type contextKey string
+
+const UserIdKey contextKey = "userId"
+
+func JwtMiddleware(next HttpFunc) HttpFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		email := r.Header.Get("Email")
+		token := r.URL.Query().Get("token")
 		if token == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
+			token = r.Header.Get("Authorization")
+			if token == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
 		}
-		_, secret, err := redisStore.GetJwt(email)
+		userId, err := utils.VerifyJwt(token)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		valid, err := utils.VerifyJwt(email, token, secret)
-		if err != nil || !valid {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next(w, r)
+		ctx := context.WithValue(r.Context(), UserIdKey, userId)
+		next(w, r.WithContext(ctx))
 	}
 }

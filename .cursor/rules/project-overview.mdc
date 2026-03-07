@@ -1,0 +1,64 @@
+---
+description: aichat 项目总览 — 目标、技术栈、目录结构、当前进度
+alwaysApply: true
+---
+
+# aichat 项目总览
+
+## 目标
+构建一个支持 AI Agent 聊天和任务规划的 IM 系统。
+
+## 技术栈
+- **语言**: Go 1.21+
+- **HTTP 路由**: gorilla/mux
+- **WebSocket**: gorilla/websocket
+- **数据库**: MySQL（database/sql + golang-migrate 迁移）
+- **缓存**: Redis（go-redis/v9，Hash 存储用户和 JWT）
+- **认证**: JWT（golang-jwt/v5）+ bcrypt 密码哈希
+- **配置**: .env（godotenv）
+
+## 目录结构
+```
+aichat/
+├── main.go               # 程序入口，初始化并启动服务
+├── api/                  # HTTP handler 层
+│   └── user.go           # 用户相关接口（create/login/list）
+├── service/              # 业务逻辑层（接口 + 默认实现）
+│   ├── user.go           # UserService 接口与实现
+│   └── error.go          # 统一错误类型
+├── store/                # 数据存储层
+│   ├── user.go           # UserStore 接口
+│   ├── user_db.go        # MySQL 实现
+│   ├── user_redis.go     # Redis 实现
+│   ├── mysql.go          # MySQL 连接与迁移
+│   └── migrations/       # SQL 迁移文件（golang-migrate）
+├── gateway/              # 长连接网关
+│   ├── conn.go           # Conn 接口
+│   ├── conn_manager.go   # 连接池管理
+│   ├── server.go         # Server 接口
+│   └── ws/               # WebSocket 实现
+│       ├── ws_server.go
+│       └── ws_conn.go    # ⚠️ 待实现
+├── types/                # 数据结构定义
+│   └── user.go
+├── middleware/
+│   └── jwt.go            # JWT HTTP 中间件（已写，未挂载到路由）
+└── utils/
+    └── jwt.go            # JWT 生成与验证工具
+```
+
+## 当前进度（已完成）
+- 用户注册 / 登录 / 列表 HTTP 接口
+- MySQL + Redis 双存储
+- JWT 工具函数和中间件（中间件未挂载）
+- WebSocket 接口定义（`gateway/ws/ws_conn.go` 为空，待实现）
+
+## 待实现（按优先级）
+1. WebSocket 连接层（ws_conn.go 读写循环 + 心跳）
+2. 密码 bcrypt 哈希 + JWT 中间件挂载 + Logout
+3. 消息系统（types/message.go + store + 迁移）
+4. 单聊 → 群聊 → ACK → 离线消息 → 在线状态
+5. AI Agent 接入（LLM API + Memory + Function Calling + Planner）
+6. 分布式升级（Kafka + 微服务 + Docker Compose）
+
+详细 24 周计划见：`.cursor/plans/aichat_后端成长计划_*.plan.md`

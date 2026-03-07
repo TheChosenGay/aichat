@@ -17,6 +17,7 @@ type ErrorOptType string
 const (
 	ErrUserCreate ErrorOptType = "user create"
 	ErrUserLogin  ErrorOptType = "user login"
+	ErrUserList   ErrorOptType = "user list"
 )
 
 var (

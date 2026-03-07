@@ -10,6 +10,7 @@ import (
 	"github.com/TheChosenGay/aichat/store"
 	"github.com/TheChosenGay/aichat/types"
 	"github.com/TheChosenGay/aichat/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService interface {
@@ -17,6 +18,7 @@ type UserService interface {
 	LoginByPassword(userId string, password string) (string, error)
 	Logout(userId string) error
 	DeleteUser(userId string) error
+	ListUsers(limit int) ([]*types.User, error)
 }
 
 func NewUserService(dbStore store.UserStore, redisStore *store.UserRedisStore) UserService {
@@ -36,6 +38,11 @@ func (s *defaultUserService) CreateUser(user *types.User) error {
 		return nil
 	}
 
+	hashed, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user.Password = string(hashed)
 	if err := s.dbStore.Save(user); err != nil {
 		return err
 	}
@@ -51,13 +58,13 @@ func (s *defaultUserService) LoginByPassword(userId string, password string) (st
 	if err != nil {
 		return "", err
 	}
-	if user.Password != password {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		slog.Error("password incorrect", "login  by password err: ", user)
 		return "", errors.New("password incorrect")
 	}
 
 	secret := strconv.Itoa(rand.Int()) + strconv.FormatInt(time.Now().UnixNano(), 10)
-	jwtToken, err := utils.GenerateJwt(user, secret)
+	jwtToken, err := utils.GenerateJwt(user)
 
 	if err != nil {
 		slog.Error("failed to generate jwt token", "error", err.Error())
@@ -80,4 +87,8 @@ func (s *defaultUserService) Logout(userId string) error {
 
 func (s *defaultUserService) DeleteUser(userId string) error {
 	return nil
+}
+
+func (s *defaultUserService) ListUsers(limit int) ([]*types.User, error) {
+	return s.dbStore.List(limit)
 }

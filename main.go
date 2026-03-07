@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/TheChosenGay/aichat/api"
+	"github.com/TheChosenGay/aichat/gateway"
+	"github.com/TheChosenGay/aichat/gateway/ws"
 	"github.com/TheChosenGay/aichat/service"
 	"github.com/TheChosenGay/aichat/store"
 	"github.com/joho/godotenv"
@@ -13,7 +15,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		slog.Error("Failed to load .env file, error", err)
+		slog.Error("Failed to load .env file", "error", err)
 		return
 	}
 
@@ -32,6 +34,17 @@ func main() {
 	us := api.NewUserServer(userSrv, api.UserServerOpt{
 		ListenPort: userServicePort,
 	})
+	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
+	wsServer := ws.NewWsServer(&gateway.ServerOpt{
+		ListenPort: wsServicePort,
+	})
+
+	go func() {
+		if err := wsServer.Run(); err != nil {
+			slog.Error("Failed to run ws server", "error", err)
+			return
+		}
+	}()
 
 	if err := us.Run(); err != nil {
 		slog.Error("Failed to run user server", "error", err)

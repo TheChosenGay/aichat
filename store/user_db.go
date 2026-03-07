@@ -18,6 +18,12 @@ SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
 FROM users
 WHERE id = ?
 `
+const ListUserSql = `
+SELECT id, email, name, is_valid, create_at, birth_at, update_at, sex
+FROM users
+ORDER BY create_at DESC
+LIMIT ?
+`
 
 type UserDbStore struct {
 	db *sql.DB
@@ -55,4 +61,22 @@ func (s *UserDbStore) GetById(id string) (*types.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (s *UserDbStore) List(limit int) ([]*types.User, error) {
+	rows, err := s.db.QueryContext(context.Background(), ListUserSql, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []*types.User
+	for rows.Next() {
+		var user types.User
+		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+	return users, nil
 }

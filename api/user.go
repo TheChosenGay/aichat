@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/TheChosenGay/aichat/service"
@@ -42,6 +43,7 @@ func (u *UserServer) Run() error {
 	mx := mux.NewRouter()
 	mx.HandleFunc("/user/create", u.createUserHandler).Methods("POST")
 	mx.HandleFunc("/user/login", u.loginHandler).Methods("POST")
+	mx.HandleFunc("/user/list/{limit}", u.listUserHandler).Methods("GET")
 
 	slog.Info("User server listening on port", "port", u.opt.ListenPort)
 	return http.ListenAndServe(u.opt.ListenPort, mx)
@@ -79,6 +81,7 @@ func (u *UserServer) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// post address:port/user/login?id=xxx&password=xxx
 func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	vars := r.URL.Query()
 	userId := vars.Get("id")
@@ -96,6 +99,29 @@ func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := WriteToJson(w, map[string]any{
 		"code":     0,
 		"jwtToken": jwtToken,
+	}); err != nil {
+		slog.Error("Failed to write to json", "error", err.Error())
+		return
+	}
+}
+
+// get address:port/user/list/{limit}
+func (u *UserServer) listUserHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	limit, err := strconv.Atoi(vars["limit"])
+	if err != nil {
+		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserList, err).String(), http.StatusBadRequest)
+		return
+	}
+	users, err := u.userService.ListUsers(limit)
+	if err != nil {
+		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserList, err).String(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := WriteToJson(w, map[string]any{
+		"code":  0,
+		"users": users,
 	}); err != nil {
 		slog.Error("Failed to write to json", "error", err.Error())
 		return

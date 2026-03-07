@@ -1,0 +1,51 @@
+---
+description: WebSocket 连接层设计模式 — WsConn 结构、读写分离、心跳、消息协议
+globs: gateway/**/*.go
+alwaysApply: false
+---
+
+# Gateway 层设计模式
+
+## WsConn 核心结构
+```go
+type WsConn struct {
+    id   string          // userId，也是 ConnManager 的 key
+    conn *websocket.Conn
+    send chan []byte      // 写缓冲，容量 256
+    done chan struct{}    // 关闭信号
+}
+```
+
+## 读写分离模式（必须遵守）
+每个连接启动两个 goroutine：
+- `readPump`：阻塞读 WebSocket，收到消息后调用 handler
+- `writePump`：阻塞监听 send channel，写入 WebSocket + 定时 Ping
+
+```go
+// 连接建立后
+go conn.writePump()   // 后台运行
+conn.readPump(handler) // 当前 goroutine，退出即连接结束
+```
+
+## 心跳参数
+```go
+writeWait  = 10s   // 每次写操作的超时
+pongWait   = 60s   // 等待 Pong 的超时
+pingPeriod = 54s   // 发 Ping 的间隔（= pongWait * 9/10）
+```
+
+## WS 消息 JSON 协议（Week 4 实现后）
+```json
+// 客户端 → 服务端
+{"type":"chat","msgId":"uuid","toId":"userId","content":"hello"}
+{"type":"ack","msgId":"uuid"}
+
+// 服务端 → 客户端
+{"type":"chat","msgId":"uuid","fromId":"userId","content":"hello","sendAt":1234567890}
+{"type":"system","content":"对方不在线"}
+```
+
+## ConnManager 使用规范
+- 读操作用 `GetConn` —— 内部已加 RLock
+- 写/删用 `AddConn` / `RemoveConn` —— 内部已加 Lock
+- 禁止在 ConnManager 外部直接访问 `conns` map
