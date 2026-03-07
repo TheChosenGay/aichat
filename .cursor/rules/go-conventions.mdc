@@ -50,6 +50,28 @@ online:{userId}        # String，在线状态（EX 60）
 agent:memory:{userId}  # List，对话历史
 ```
 
+## HTTP 接口参数规范
+
+| 场景 | 参数位置 | 原因 |
+|------|---------|------|
+| 查询类（GET） | URL Query `?limit=10` | 幂等、可缓存、可书签 |
+| 创建/修改/登录（POST/PUT） | JSON Body | 不会出现在日志，无长度限制 |
+| 资源标识（GET/DELETE） | URL Path `/user/{id}` | 符合 REST 语义 |
+| **密码、token 等敏感信息** | **禁止放 URL** | URL 会被服务器日志、浏览器历史、代理记录 |
+
+```go
+// ✅ 正确：敏感信息放 Body
+var req struct {
+    Id       string `json:"id"`
+    Password string `json:"password"`
+}
+json.NewDecoder(r.Body).Decode(&req)
+
+// ❌ 错误：密码放 URL Query
+password := r.URL.Query().Get("password")
+// → 出现在 access log: POST /login?password=123456
+```
+
 ## MySQL 迁移
 - 迁移文件放 `store/migrations/`，用 golang-migrate 管理
 - 命名：`{seq}_{描述}.up.sql` / `{seq}_{描述}.down.sql`

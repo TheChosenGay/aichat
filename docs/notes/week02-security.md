@@ -220,7 +220,68 @@ WebSocket 握手本质是 HTTP 请求，但浏览器原生 `WebSocket` API 和 w
 
 ---
 
-## 五、secret 管理方案对比
+## 五、HTTP 接口参数规范
+
+### 密码为什么必须放 Body，不能放 URL
+
+**原因一：URL 会被多处记录**
+
+```
+GET /user/login?password=123456
+```
+这条 URL 会出现在：
+- 服务器 access log（nginx/apache 默认记录完整 URL）
+- 浏览器历史记录
+- CDN / 反向代理的日志
+- 终端 shell 历史（curl 命令）
+
+HTTP Body 不会出现在任何日志，除非你主动打印。
+
+**原因二：URL 有长度限制**
+
+不同浏览器/服务器限制不同（通常 2KB-8KB），Body 理论上无限制。密码、头像等大字段放 URL 随时溢出。
+
+**原因三：HTTP 方法语义**
+
+| 方法 | 语义 | 参数位置 |
+|------|------|---------|
+| GET | 查询，幂等，可缓存 | URL Query |
+| POST | 创建/提交，有副作用 | JSON Body |
+| PUT/PATCH | 修改 | JSON Body |
+| DELETE | 删除 | URL Path |
+
+登录会产生 token（有副作用），应该用 `POST` + Body。
+查询用 `GET` + Query 完全合理（`/user/list?limit=10`）。
+
+### 参数位置总结
+
+| 场景 | 参数位置 |
+|------|---------|
+| 查询条件（GET） | URL Query `?limit=10&page=1` |
+| 资源标识（任意方法） | URL Path `/user/{id}` |
+| 创建/修改的数据（POST/PUT） | JSON Body |
+| **密码、token 等敏感信息** | **必须放 Body，禁止放 URL** |
+
+### 读取 Body 的标准写法
+
+```go
+// 定义请求结构体
+type LoginRequest struct {
+    Id       string `json:"id"       validate:"required,uuid"`
+    Password string `json:"password" validate:"required,min=8,max=32"`
+}
+
+// handler 里解码
+var req LoginRequest
+if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+    http.Error(w, "invalid request body", http.StatusBadRequest)
+    return
+}
+```
+
+---
+
+## 六、secret 管理方案对比
 
 | 方案 | 安全性 | 适用阶段 |
 |------|-------|---------|
