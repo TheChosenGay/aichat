@@ -21,8 +21,9 @@ func main() {
 
 	userServicePort := os.Getenv("USER_SERVICE_LISTEN_PORT")
 	slog.Info("User service port", "port", userServicePort)
+	db := store.NewMysqlInstance()
 	// user server
-	userDbStore := store.NewUserDbStore(store.NewMysqlInstance())
+	userDbStore := store.NewUserDbStore(db)
 	userRedisStore := store.NewUserRedisStore(
 		store.WithRedisClientName("user_service"),
 		store.WithRedisDB(1),
@@ -35,9 +36,12 @@ func main() {
 		ListenPort: userServicePort,
 	})
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
+	connManager := gateway.NewConnManager()
+	msgStore := store.NewMessageDbStore(db)
+	msgService := service.NewMessageService(msgStore, connManager)
 	wsServer := ws.NewWsServer(&gateway.ServerOpt{
 		ListenPort: wsServicePort,
-	})
+	}, connManager, msgService)
 
 	go func() {
 		if err := wsServer.Run(); err != nil {

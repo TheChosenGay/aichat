@@ -250,7 +250,109 @@ WHERE send_at > ?                        -- ❌ 不走索引（没有 to_id）
 
 ---
 
-## 六、本项目的存储方案
+## 六、消息路由设计（MessageRouter）
+
+### 问题：MessageService 怎么把消息推给接收方
+
+`MessageService` 存完消息后需要推送给接收方，但接收方的连接在 `ConnManager`（gateway 层），直接依赖 gateway 会破坏分层。
+
+### 错误做法
+
+```go
+// ❌ service 层直接依赖 gateway 层，违反分层原则
+type MessageService struct {
+    connManager *gateway.ConnManager  // 不应该这样
+}
+```
+
+### 正确做法：依赖倒置（DIP）
+
+**接口定义在使用方（service 包），实现方去适配接口**：
+
+```
+service 包定义 MessageRouter 接口
+    ↑ 隐式实现（Go 不需要 implements 关键字）
+gateway.ConnManager
+```
+
+```go
+// service/router.go — 接口定义在使用方
+type MessageRouter interface {
+    Route(toId string, msg *types.Message) error
+}
+
+// service/message.go — 依赖接口，不依赖实现
+type MessageService struct {
+    messageStore store.MessageStore
+    router       MessageRouter  // 接口类型
+}
+
+func (s *MessageService) SendMessage(msg *types.Message) error {
+    s.messageStore.Save(msg)
+    return s.router.Route(msg.ToId, msg)  // 不知道底层是 WS 还是 Kafka
+}
+```
+
+```go
+// gateway/conn_manager.go — 实现接口，无需 import service
+func (c *ConnManager) Route(toId string, msg *types.Message) error {
+    conn, err := c.GetConn(toId)
+    if err != nil {
+        return nil  // 用户不在线，Week 7 处理离线消息
+    }
+    data, _ := json.Marshal(msg)
+    return conn.Push(data)
+}
+```
+
+```go
+// main.go — 在最外层组装，把实现注入给接口
+connManager := gateway.NewConnManager()
+messageSrv := service.NewMessageService(messageStore, connManager)
+//                                                    ↑ ConnManager 自动匹配 MessageRouter 接口
+```
+
+### 为什么 Route 传 *types.Message 而不是 []byte
+
+```go
+// ❌ 传 []byte：调用方需要先序列化，序列化方式固定死了
+Route(toId string, data []byte) error
+
+// ✅ 传 *types.Message：由 Router 实现方决定序列化格式
+Route(toId string, msg *types.Message) error
+// WS Router：json.Marshal
+// Kafka Router（Week 17）：protobuf 或 json，由实现方决定
+```
+
+### 依赖关系图
+
+```
+main.go
+  ├── import service
+  └── import gateway
+        ↓ 组装时注入
+service.MessageService
+  └── 依赖 MessageRouter 接口（service 包内定义）
+        ↑ 实现（隐式）
+gateway.ConnManager
+  └── 不需要 import service
+```
+
+### 未来扩展（Week 17）
+
+换 Kafka 时只需要新增一个实现，`MessageService` 完全不改：
+
+```go
+type KafkaRouter struct { producer *kafka.Producer }
+func (r *KafkaRouter) Route(toId string, msg *types.Message) error {
+    // 发到 Kafka topic
+}
+// main.go 里把 connManager 换成 kafkaRouter 即可
+```
+
+---
+
+## 七、本项目的存储方案
 
 | 数据 | 存储 | 原因 |
 |------|------|------|

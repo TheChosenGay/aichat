@@ -1,24 +1,32 @@
 package ws
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/TheChosenGay/aichat/gateway"
 	"github.com/TheChosenGay/aichat/middleware"
+	"github.com/TheChosenGay/aichat/service"
+	"github.com/TheChosenGay/aichat/types"
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 )
 
 type WsServer struct {
 	opt         *gateway.ServerOpt
 	upgrader    *websocket.Upgrader
-	connManager *gateway.ConnManager
+	ConnManager *gateway.ConnManager
+	MessageSrv  *service.MessageService
+	validate    *validator.Validate
 }
 
-func NewWsServer(opt *gateway.ServerOpt) *WsServer {
+func NewWsServer(opt *gateway.ServerOpt, connManager *gateway.ConnManager, messageService *service.MessageService) *WsServer {
 	return &WsServer{
 		opt:         opt,
-		connManager: gateway.NewConnManager(),
+		MessageSrv:  messageService,
+		ConnManager: connManager,
+		validate:    validator.New(),
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -54,14 +62,31 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		id,
 		c,
 		func(id string) {
-			s.connManager.RemoveConn(id)
+			s.ConnManager.RemoveConn(id)
 		},
 		func(data []byte) {
+			//gorilla/websocket会处理分片，返回的data []byte已经是完整的了
 			slog.Info("receive message", "data", string(data))
+			var message types.Message
+			if err := json.Unmarshal(data, &message); err != nil {
+				slog.Error("Failed to unmarshal message", "error", err.Error())
+				return
+			}
+
+			message.FromId = id
+
+			if err := s.validate.Struct(message); err != nil {
+				slog.Error("Failed to validate message", "error", err.Error())
+				return
+			}
+			if err := s.MessageSrv.SendMessage(&message); err != nil {
+				slog.Error("Failed to send message", "error", err.Error())
+				return
+			}
 		},
 	)
 
-	if err := s.connManager.AddConn(conn); err != nil {
+	if err := s.ConnManager.AddConn(conn); err != nil {
 		slog.Error("Failed to add conn", "error", err.Error())
 		conn.Close()
 		return

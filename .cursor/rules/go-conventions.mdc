@@ -50,6 +50,40 @@ online:{userId}        # String，在线状态（EX 60）
 agent:memory:{userId}  # List，对话历史
 ```
 
+## 依赖倒置原则（DIP）
+
+**接口定义在使用方，不是实现方。**
+
+```
+❌ 错误：service 直接依赖 gateway 的具体实现
+service.MessageService
+  └── *gateway.ConnManager  ← 跨层依赖，无法替换
+
+✅ 正确：service 定义接口，gateway 隐式实现
+service.MessageRouter（接口，定义在 service 包）
+  ↑ 实现
+gateway.ConnManager（不需要 import service）
+  ↑ 注入
+main.go（在最外层组装）
+```
+
+**实际写法：**
+```go
+// service 包 — 定义接口（使用方）
+type MessageRouter interface {
+    Route(toId string, msg *types.Message) error
+}
+
+// gateway 包 — 实现接口，无需 import service
+func (c *ConnManager) Route(toId string, msg *types.Message) error { ... }
+
+// main.go — 注入实现
+messageSrv := service.NewMessageService(store, connManager)
+//                                             ↑ 自动匹配接口，Go 隐式实现
+```
+
+**好处：** 替换实现（比如 WS → Kafka）时，只需新增实现类，上层代码完全不改。
+
 ## HTTP 接口参数规范
 
 | 场景 | 参数位置 | 原因 |
