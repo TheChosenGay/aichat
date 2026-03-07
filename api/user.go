@@ -21,6 +21,18 @@ type UserServerOpt struct {
 
 type UserServerOption func(*UserServerOpt)
 
+type LoginRequest struct {
+	Id       string `json:"id" validate:"required, uuid"`
+	Password string `json:"password" validate:"required,min=8,max=32"`
+}
+
+type CreateRequest struct {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8,max=32"`
+	Name     string `json:"name" validate:"required,min=3,max=32"`
+	Sex      bool   `json:"sex" validate:"required,boolean"`
+}
+
 type UserServer struct {
 	opt         *UserServerOpt
 	userService service.UserService
@@ -51,11 +63,19 @@ func (u *UserServer) Run() error {
 
 // post address:port/user/create?email=xxx&password=xxx&name=xxx&birthAt=xxxx&sex=1|0
 func (u *UserServer) createUserHandler(w http.ResponseWriter, r *http.Request) {
-	vars := r.URL.Query()
-	email := vars.Get("email")
-	password := vars.Get("password")
-	name := vars.Get("name")
-	sex := vars.Get("sex") == "1"
+	req := &CreateRequest{}
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		WriteToJson(w, map[string]any{
+			"code":  1,
+			"error": err.Error(),
+		})
+		return
+	}
+	email := req.Email
+	password := req.Password
+	name := req.Name
+	sex := req.Sex
+
 	uid := uuid.New().String()
 	user := types.NewUser(uid, email, password, name, sex, 0, time.Now().UnixNano())
 
@@ -83,9 +103,17 @@ func (u *UserServer) createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 // post address:port/user/login?id=xxx&password=xxx
 func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
-	vars := r.URL.Query()
-	userId := vars.Get("id")
-	password := vars.Get("password")
+	req := &LoginRequest{}
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		WriteToJson(w, map[string]any{
+			"code":  1,
+			"error": err.Error(),
+		})
+		return
+	}
+	userId := req.Id
+	password := req.Password
+
 	if userId == "" || password == "" {
 		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, service.ErrParamInvalid).String(), http.StatusBadRequest)
 		return

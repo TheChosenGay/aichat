@@ -3,9 +3,6 @@ package service
 import (
 	"errors"
 	"log/slog"
-	"math/rand/v2"
-	"strconv"
-	"time"
 
 	"github.com/TheChosenGay/aichat/store"
 	"github.com/TheChosenGay/aichat/types"
@@ -63,20 +60,12 @@ func (s *defaultUserService) LoginByPassword(userId string, password string) (st
 		return "", errors.New("password incorrect")
 	}
 
-	secret := strconv.Itoa(rand.Int()) + strconv.FormatInt(time.Now().UnixNano(), 10)
 	jwtToken, err := utils.GenerateJwt(user)
 
 	if err != nil {
 		slog.Error("failed to generate jwt token", "error", err.Error())
 		return "", err
 	}
-
-	go func() {
-		// 无所谓失败与否
-		if err := s.redisStore.SaveJwt(userId, jwtToken, secret); err != nil {
-			slog.Error("failed to save jwt token", "error", err.Error())
-		}
-	}()
 
 	return jwtToken, nil
 }
