@@ -13,7 +13,7 @@ INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_deliver
 VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 const ListMessagesByToIdSql = `
-SELECT * 
+SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered
 FROM messages
 WHERE to_id = ? AND send_at < ?
 ORDER BY send_at DESC
