@@ -180,6 +180,42 @@ SELECT * FROM messages WHERE send_at < ? ORDER BY send_at DESC LIMIT 20
 
 游标分页性能与页码无关，大数据量下优势明显。
 
+### 游标分页 vs OFFSET 详解
+
+**OFFSET 的问题：翻页越深越慢**
+
+```sql
+SELECT * FROM messages ORDER BY send_at DESC LIMIT 20 OFFSET 2000
+```
+
+MySQL 不是真的"跳过"2000 行，而是**读了再丢**：
+- 读出 2020 行 → 丢掉前 2000 行 → 返回 20 行
+- 翻到第 N 页，就要读 N×20 行，性能随页码线性下降
+
+```
+第 1 页   → 读 20 行    ✅
+第 100 页 → 读 2000 行  ⚠️
+第 1000 页→ 读 20000 行 ❌
+第 5000 页→ 读 100000 行 💀
+```
+
+**游标分页：无论翻到哪页，每次只读 20 行**
+
+```sql
+-- 客户端把上一页最后一条的 send_at 作为游标传来
+SELECT * FROM messages
+WHERE to_id = ? AND send_at < ?   -- 直接从游标位置开始
+ORDER BY send_at DESC LIMIT 20
+```
+
+配合索引 `idx_to_id_send_at (to_id, send_at)`，MySQL 直接跳到游标位置，O(1) 定位，性能与页码无关。
+
+**游标分页的代价：不支持跳页**
+
+只能"下一页"，不能直接跳到第 50 页。IM 历史消息是"往上滑加载更多"，天然顺序翻页，完全适合游标分页。
+
+---
+
 ### SELECT * 的隐患
 
 ```go

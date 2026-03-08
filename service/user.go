@@ -13,6 +13,7 @@ import (
 type UserService interface {
 	CreateUser(*types.User) error
 	LoginByPassword(userId string, password string) (string, error)
+	LoginByEmail(email string, password string) (string, error)
 	Logout(userId string) error
 	DeleteUser(userId string) error
 	ListUsers(limit int) ([]*types.User, error)
@@ -48,6 +49,17 @@ func (s *defaultUserService) CreateUser(user *types.User) error {
 		return err
 	}
 	return nil
+}
+
+func (s *defaultUserService) LoginByEmail(email string, password string) (string, error) {
+	user, err := s.dbStore.GetByEmail(email)
+	if err != nil {
+		return "", err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return "", errors.New("password incorrect")
+	}
+	return user.Id, nil
 }
 
 func (s *defaultUserService) LoginByPassword(userId string, password string) (string, error) {

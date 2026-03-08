@@ -22,7 +22,7 @@ type UserServerOpt struct {
 type UserServerOption func(*UserServerOpt)
 
 type LoginRequest struct {
-	Id       string `json:"id" validate:"required, uuid"`
+	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8,max=32"`
 }
 
@@ -111,14 +111,14 @@ func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	userId := req.Id
+	email := req.Email
 	password := req.Password
 
-	if userId == "" || password == "" {
+	if email == "" || password == "" {
 		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, service.ErrParamInvalid).String(), http.StatusBadRequest)
 		return
 	}
-	jwtToken, err := u.userService.LoginByPassword(userId, password)
+	jwtToken, err := u.userService.LoginByEmail(email, password)
 	if err != nil {
 		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, err).String(), http.StatusInternalServerError)
 		return

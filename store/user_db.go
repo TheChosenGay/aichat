@@ -18,6 +18,13 @@ SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
 FROM users
 WHERE id = ?
 `
+
+const GetUserByEmailSql = `
+SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
+FROM users
+WHERE email = ?
+`
+
 const ListUserSql = `
 SELECT id, email, name, is_valid, create_at, birth_at, update_at, sex
 FROM users
@@ -52,6 +59,19 @@ func (s *UserDbStore) Save(user *types.User) error {
 
 func (s *UserDbStore) GetById(id string) (*types.User, error) {
 	row := s.db.QueryRowContext(context.Background(), GetUserByIdSql, id)
+	if err := row.Err(); err != nil {
+		return nil, err
+	}
+	var user types.User
+	err := row.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (s *UserDbStore) GetByEmail(email string) (*types.User, error) {
+	row := s.db.QueryRowContext(context.Background(), GetUserByEmailSql, email)
 	if err := row.Err(); err != nil {
 		return nil, err
 	}
