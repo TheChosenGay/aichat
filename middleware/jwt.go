@@ -19,7 +19,7 @@ func JwtMiddleware(next HttpFunc) HttpFunc {
 		token := r.URL.Query().Get("token")
 		if token == "" {
 			token = r.Header.Get("Authorization")
-			token = strings.TrimPrefix(token, "Bearer ")
+			token = strings.TrimSpace(strings.TrimPrefix(token, "Bearer "))
 			if token == "" {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return

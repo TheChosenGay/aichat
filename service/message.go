@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+
 	"github.com/TheChosenGay/aichat/store"
 	"github.com/TheChosenGay/aichat/types"
 )
@@ -20,6 +22,9 @@ func NewMessageService(messageStore store.MessageStore, roomStore store.RoomStor
 }
 
 func (s *MessageService) SendMessage(message *types.Message) error {
+	if message.ToId == "" && message.RoomId == "" {
+		return errors.New("to_id or room_id is required")
+	}
 	// 保存消息
 	if err := s.messageStore.Save(message); err != nil {
 		return err
