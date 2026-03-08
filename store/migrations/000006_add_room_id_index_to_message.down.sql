@@ -1,0 +1,1 @@
+ALTER TABLE messages DROP INDEX room_id_send_at;

@@ -216,7 +216,75 @@ ORDER BY send_at DESC LIMIT 20
 
 ---
 
-### SELECT * 的隐患
+---
+
+## 六、会话（Session）设计
+
+### 什么是会话
+
+IM 里的会话列表（微信左边那一栏），每条对话是一个 session，包含：
+
+```
+会话 ID
+对方的头像和名字
+最后一条消息内容（预览）
+最后一条消息时间
+未读数
+```
+
+### 为什么现在测试需要手写 JSON
+
+wscat 是底层工具，相当于直接操作 WebSocket 帧，适合验证后端逻辑。
+
+真实客户端（App/网页）会自动封装：
+```
+用户输入 "hello" → 点发送
+    ↓
+客户端自动构造 JSON：
+{
+  "msgId":  uuid(),           // 自动生成
+  "toId":   "当前会话的对象", // 从当前 session 取
+  "type":   0,
+  "content": "hello",         // 用户输入
+  "sendAt": Date.now()        // 自动填
+}
+    ↓
+通过 WebSocket 发出
+```
+
+用户完全感知不到 JSON，只看到对话界面。
+
+### 后端 Session 表设计（Week 9 实现）
+
+```sql
+CREATE TABLE conversations (
+    id           VARCHAR(36) PRIMARY KEY,
+    user_id      VARCHAR(36) NOT NULL,   -- 属于哪个用户
+    target_id    VARCHAR(36) NOT NULL,   -- 对方 userId 或 roomId
+    last_msg     VARCHAR(200),           -- 最后一条消息预览
+    last_msg_at  BIGINT,                 -- 最后消息时间（用于排序）
+    unread_count INT DEFAULT 0,          -- 未读数
+    INDEX idx_user_id_last_msg_at (user_id, last_msg_at)
+);
+```
+
+**触发时机：** 每次 `MessageService.SendMessage` 成功后，更新发送方和接收方各自的 conversation 记录（`INSERT ... ON DUPLICATE KEY UPDATE`）。
+
+**查询会话列表：**
+```sql
+SELECT * FROM conversations
+WHERE user_id = ?
+ORDER BY last_msg_at DESC
+LIMIT 20
+```
+
+### 当前阶段不做的原因
+
+消息系统（单聊+群聊）稳定后再加一层聚合会更自然。Session 依赖消息系统，Week 5 群聊完成后，Week 9 API 规范化时一起加。
+
+---
+
+## 七、SELECT * 的隐患
 
 ```go
 // 当前写法

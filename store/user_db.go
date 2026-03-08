@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/TheChosenGay/aichat/types"
 )
@@ -24,6 +26,7 @@ SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
 FROM users
 WHERE email = ?
 `
+
 
 const ListUserSql = `
 SELECT id, email, name, is_valid, create_at, birth_at, update_at, sex
@@ -93,6 +96,39 @@ func (s *UserDbStore) List(limit int) ([]*types.User, error) {
 	for rows.Next() {
 		var user types.User
 		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+	return users, nil
+}
+
+func (s *UserDbStore) GetUsersByIds(ids []string) ([]*types.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	// 动态构建 IN (?, ?, ...) 占位符
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1] // 去掉末尾逗号
+	sql := fmt.Sprintf(`
+SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
+FROM users WHERE id IN (%s)`, placeholders)
+
+	// 把 []string 展开为 []any
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(context.Background(), sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []*types.User
+	for rows.Next() {
+		var user types.User
+		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
 		if err != nil {
 			return nil, err
 		}

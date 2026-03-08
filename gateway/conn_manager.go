@@ -57,3 +57,26 @@ func (c *ConnManager) Route(message *types.Message) error {
 	}
 	return conn.Push(data)
 }
+
+func (c *ConnManager) RouteGroup(message *types.Message, memberIds []string) error {
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	for _, memberId := range memberIds {
+		if memberId == message.FromId {
+			continue
+		}
+
+		conn, err := c.GetConn(memberId)
+		if err != nil {
+			// 用户不在线，目前静默处理
+			continue
+		}
+		// 如果失败了，目前静默处理
+		conn.Push(data)
+	}
+	return nil
+}

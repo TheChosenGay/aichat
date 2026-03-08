@@ -1,0 +1,1 @@
+ALTER TABLE messages ADD INDEX room_id_send_at(room_id, send_at);

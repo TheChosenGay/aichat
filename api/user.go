@@ -51,14 +51,11 @@ func NewUserServer(userSrv service.UserService, opt UserServerOpt, opts ...UserS
 	return u
 }
 
-func (u *UserServer) Run() error {
-	mx := mux.NewRouter()
+// MARK - RegisterHandler
+func (u *UserServer) RegisterHandler(mx *mux.Router) {
 	mx.HandleFunc("/user/create", u.createUserHandler).Methods("POST")
 	mx.HandleFunc("/user/login", u.loginHandler).Methods("POST")
 	mx.HandleFunc("/user/list/{limit}", u.listUserHandler).Methods("GET")
-
-	slog.Info("User server listening on port", "port", u.opt.ListenPort)
-	return http.ListenAndServe(u.opt.ListenPort, mx)
 }
 
 // post address:port/user/create?email=xxx&password=xxx&name=xxx&birthAt=xxxx&sex=1|0

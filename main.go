@@ -29,16 +29,25 @@ func main() {
 		store.WithRedisDB(1),
 		store.WithRedisAddr(os.Getenv("REDIS_ADDR")),
 	)
+	msgStore := store.NewMessageDbStore(db)
+	roomStore := store.NewRoomDbStore(db)
 
 	userSrv := service.NewUserService(userDbStore, userRedisStore)
+	roomSrv := service.NewRoomService(roomStore, userDbStore)
 
-	us := api.NewUserServer(userSrv, api.UserServerOpt{
-		ListenPort: userServicePort,
-	})
+	apiServer := api.NewServer(
+		&api.ServerOpt{
+			ListenPort: userServicePort,
+		},
+		api.NewUserServer(userSrv, api.UserServerOpt{
+			ListenPort: userServicePort,
+		}),
+		api.NewRoomServer(roomSrv),
+	)
+
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
 	connManager := gateway.NewConnManager()
-	msgStore := store.NewMessageDbStore(db)
-	msgService := service.NewMessageService(msgStore, connManager)
+	msgService := service.NewMessageService(msgStore, roomStore, connManager)
 	wsServer := ws.NewWsServer(&gateway.ServerOpt{
 		ListenPort: wsServicePort,
 	}, connManager, msgService)
@@ -50,7 +59,7 @@ func main() {
 		}
 	}()
 
-	if err := us.Run(); err != nil {
+	if err := apiServer.Run(); err != nil {
 		slog.Error("Failed to run user server", "error", err)
 		return
 	}

@@ -3,7 +3,7 @@ package types
 type User struct {
 	Id       string `validate:"required,uuid" redis:"user:id"`
 	Email    string `validate:"required,email" redis:"user:email"`
-	Password string `validate:"required,min=8,max=32" redis:"-"`
+	Password string `validate:"required,min=8,max=32" redis:"-" json:"-"`
 	Name     string `validate:"required,min=3,max=32" redis:"user:name"`
 	IsValid  bool   `validate:"required" redis:"user:is_valid"`  // true: valid, false: invalid
 	CreateAt int64  `validate:"required" redis:"user:create_at"` // unix timestamp
