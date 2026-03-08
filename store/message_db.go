@@ -13,7 +13,7 @@ INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_deliver
 VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 const ListMessagesByToIdSql = `
-SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered
+SELECT msg_id, from_id, to_id,room_id, type, content, send_at, is_delivered
 FROM messages
 WHERE to_id = ? AND send_at < ?
 ORDER BY send_at DESC
@@ -31,7 +31,7 @@ func NewMessageDbStore(db *sql.DB) *MessageDbStore {
 }
 
 func (m *MessageDbStore) Save(message *types.Message) error {
-	result, err := m.db.Exec(InsertMessageSql, message.MsgId, message.FromId, message.ToId, message.Type, message.Content, message.SendAt, message.IsDelivered)
+	result, err := m.db.Exec(InsertMessageSql, message.MsgId, message.FromId, message.ToId, message.RoomId, message.Type, message.Content, message.SendAt, message.IsDelivered)
 	if err != nil {
 		return err
 	}
