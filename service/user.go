@@ -59,7 +59,12 @@ func (s *defaultUserService) LoginByEmail(email string, password string) (string
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return "", errors.New("password incorrect")
 	}
-	return user.Id, nil
+
+	jwtToken, err := utils.GenerateJwt(user)
+	if err != nil {
+		return "", err
+	}
+	return jwtToken, nil
 }
 
 func (s *defaultUserService) LoginByPassword(userId string, password string) (string, error) {
