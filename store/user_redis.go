@@ -117,6 +117,15 @@ func (s *UserRedisStore) GetJwt(email string) (string, string, error) {
 
 }
 
+func (s *UserRedisStore) RemoveJwt(email string) error {
+	key := "user:jwt:" + email
+	ctx := context.Background()
+	if err := s.redis.Del(ctx, key).Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *UserRedisStore) SaveUser(user *types.User) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()

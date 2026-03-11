@@ -29,8 +29,14 @@ func (c *ConnManager) AddConn(conn Conn) error {
 
 func (c *ConnManager) RemoveConn(id string) error {
 	c.mx.Lock()
-	defer c.mx.Unlock()
+	conn, ok := c.conns[id]
+	if !ok {
+		return errors.New("conn not found")
+	}
 	delete(c.conns, id)
+	c.mx.Unlock()
+
+	conn.Close()
 	return nil
 }
 

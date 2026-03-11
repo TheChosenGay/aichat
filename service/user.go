@@ -10,6 +10,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type SessionCleaner interface {
+	RemoveConn(userId string) error
+}
+
 type UserService interface {
 	CreateUser(*types.User) error
 	LoginByPassword(userId string, password string) (string, error)
@@ -19,16 +23,18 @@ type UserService interface {
 	ListUsers(limit int) ([]*types.User, error)
 }
 
-func NewUserService(dbStore store.UserStore, redisStore *store.UserRedisStore) UserService {
+func NewUserService(dbStore store.UserStore, redisStore *store.UserRedisStore, sessionCleaner SessionCleaner) UserService {
 	return &defaultUserService{
-		dbStore:    dbStore,
-		redisStore: redisStore,
+		dbStore:        dbStore,
+		redisStore:     redisStore,
+		sessionCleaner: sessionCleaner,
 	}
 }
 
 type defaultUserService struct {
-	dbStore    store.UserStore
-	redisStore *store.UserRedisStore
+	dbStore        store.UserStore
+	redisStore     *store.UserRedisStore
+	sessionCleaner SessionCleaner
 }
 
 func (s *defaultUserService) CreateUser(user *types.User) error {
@@ -88,6 +94,15 @@ func (s *defaultUserService) LoginByPassword(userId string, password string) (st
 }
 
 func (s *defaultUserService) Logout(userId string) error {
+	user, err := s.dbStore.GetById(userId)
+	if err != nil {
+		return err
+	}
+
+	// 清楚session 信息
+	if err := s.sessionCleaner.RemoveConn(user.Id); err != nil {
+		return err
+	}
 	return nil
 }
 

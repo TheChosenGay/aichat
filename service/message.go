@@ -107,12 +107,14 @@ func (p *defaultMessagePender) Pend(msg *types.Message) error {
 
 func (p *defaultMessagePender) UnPend(msgId string) error {
 	p.mx.Lock()
-	defer p.mx.Unlock()
 	if _, ok := p.msgList[msgId]; !ok {
 		return errors.New("message not found")
 	}
-	p.opt.OnMsgAcked(p.msgList[msgId].msg)
+	msg := p.msgList[msgId].msg
 	delete(p.msgList, msgId)
+	p.mx.Unlock()
+
+	p.opt.OnMsgAcked(msg)
 	return nil
 }
 
@@ -152,8 +154,8 @@ func NewMessageService(messageStore store.MessageStore, roomStore store.RoomStor
 		},
 
 		OnMsgAcked: func(msg *types.Message) error {
-			slog.Info("message acked", "message", msg)
 			msg.IsDelivered = true
+			slog.Info("message acked", "message", msg)
 			return m.messageStore.Update(msg)
 		},
 

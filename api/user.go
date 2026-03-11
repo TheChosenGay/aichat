@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/TheChosenGay/aichat/middleware"
 	"github.com/TheChosenGay/aichat/service"
 	"github.com/TheChosenGay/aichat/types"
 	"github.com/go-playground/validator/v10"
@@ -55,6 +56,7 @@ func NewUserServer(userSrv service.UserService, opt UserServerOpt, opts ...UserS
 func (u *UserServer) RegisterHandler(mx *mux.Router) {
 	mx.HandleFunc("/user/create", u.createUserHandler).Methods("POST")
 	mx.HandleFunc("/user/login", u.loginHandler).Methods("POST")
+	mx.HandleFunc("/user/logout", middleware.JwtMiddleware(u.logoutHandler)).Methods("POST")
 	mx.HandleFunc("/user/list/{limit}", u.listUserHandler).Methods("GET")
 }
 
@@ -124,6 +126,23 @@ func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := WriteToJson(w, map[string]any{
 		"code":     0,
 		"jwtToken": jwtToken,
+	}); err != nil {
+		slog.Error("Failed to write to json", "error", err.Error())
+		return
+	}
+}
+
+func (u *UserServer) logoutHandler(w http.ResponseWriter, r *http.Request) {
+	userId := r.Context().Value(middleware.UserIdKey).(string)
+	if err := u.userService.Logout(userId); err != nil {
+		WriteToJson(w, map[string]any{
+			"code": 1,
+		})
+		return
+	}
+	if err := WriteToJson(w, map[string]any{
+		"code":   0,
+		"logout": true,
 	}); err != nil {
 		slog.Error("Failed to write to json", "error", err.Error())
 		return
