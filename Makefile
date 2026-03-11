@@ -10,4 +10,4 @@ migrate:
 test:
 	@go test -v ./...
 	
-.PHONY: build test
+.PHONY: build test run

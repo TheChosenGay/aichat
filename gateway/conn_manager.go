@@ -3,6 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sync"
 
 	"github.com/TheChosenGay/aichat/types"
@@ -48,6 +49,7 @@ func (c *ConnManager) Route(message *types.Message) error {
 	conn, err := c.GetConn(message.ToId)
 	if err != nil {
 		// 用户不在线，目前先静默处理
+		slog.Info("user not online", "toId", message.ToId)
 		return nil
 	}
 

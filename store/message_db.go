@@ -9,8 +9,8 @@ import (
 )
 
 const InsertMessageSql = `
-INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_delivered)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 const ListMessagesByToIdSql = `
 SELECT msg_id, from_id, to_id,room_id, type, content, send_at, is_delivered
@@ -18,6 +18,9 @@ FROM messages
 WHERE to_id = ? AND send_at < ?
 ORDER BY send_at DESC
 LIMIT ?
+`
+const UpdateMessageSql = `
+UPDATE messages SET is_delivered = ? WHERE msg_id = ?
 `
 
 type MessageDbStore struct {
@@ -31,7 +34,7 @@ func NewMessageDbStore(db *sql.DB) *MessageDbStore {
 }
 
 func (m *MessageDbStore) Save(message *types.Message) error {
-	result, err := m.db.Exec(InsertMessageSql, message.MsgId, message.FromId, message.ToId, message.RoomId, message.Type, message.Content, message.SendAt, message.IsDelivered)
+	result, err := m.db.Exec(InsertMessageSql, message.MsgId, message.FromId, message.ToId, message.Type, message.Content, message.SendAt, message.IsDelivered, message.RoomId)
 	if err != nil {
 		return err
 	}
@@ -62,4 +65,19 @@ func (m *MessageDbStore) ListByToId(toId string, before int64, limit int) ([]*ty
 		messages = append(messages, &message)
 	}
 	return messages, nil
+}
+
+func (m *MessageDbStore) Update(message *types.Message) error {
+	result, err := m.db.Exec(UpdateMessageSql, message.IsDelivered, message.MsgId)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return errors.New("no rows affected")
+	}
+	return nil
 }

@@ -1,0 +1,12 @@
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-cp-6IZGf_wF_Ryg9S32dVniDyRuHuhZoxy7VafM46cA2Mm-FTteJpcrbiLzWOox0TJeW9COyKpK770pRQ16NE_LjpSeqCevcg07uZr2sc5liuZ2xqVI-bPH5aE",
+    "ANTHROPIC_BASE_URL": "https://api.minimax.chat/anthropic",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2.5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2.5",
+    "ANTHROPIC_MODEL": "MiniMax-M2.5",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  }
+}

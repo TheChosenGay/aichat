@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/TheChosenGay/aichat/gateway"
 	"github.com/TheChosenGay/aichat/middleware"
@@ -74,6 +75,7 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 			}
 
 			message.FromId = id
+			message.SendAt = time.Now().Unix()
 
 			if err := s.validate.Struct(message); err != nil {
 				slog.Error("Failed to validate message", "error", err.Error())

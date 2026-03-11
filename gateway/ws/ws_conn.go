@@ -77,7 +77,7 @@ func (c *WsConn) Read() {
 		// 收到pong时续期
 		c.conn.SetPongHandler(func(string) error {
 			c.conn.SetReadDeadline(time.Now().Add(pongWait))
-			slog.Info("receive pong message")
+			slog.Info("receive pong message from ", c.Id())
 			return nil
 		})
 

@@ -13,6 +13,14 @@ import (
 )
 
 func main() {
+	// 配置 slog 显示文件名和行号
+	slog.SetDefault(slog.New(
+		slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+			AddSource: true,
+			Level:     slog.LevelDebug,
+		}),
+	))
+
 	err := godotenv.Load()
 	if err != nil {
 		slog.Error("Failed to load .env file", "error", err)
