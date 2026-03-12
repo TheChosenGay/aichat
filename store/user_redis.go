@@ -83,6 +83,29 @@ func NewUserRedisStore(opts ...UserRedisStoreOptFunc) *UserRedisStore {
 	return us
 }
 
+func (s *UserRedisStore) SetOnlineStatus(userId string, online bool) error {
+	key := "user:onlien:" + userId
+	ctx := context.Background()
+
+	if err := s.redis.Set(ctx, key, online, 60*time.Second).Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *UserRedisStore) GetOnlineStatus(userId string) (bool, error) {
+	key := "user:onlien:" + userId
+	ctx := context.Background()
+	result, err := s.redis.Get(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	if result == "" {
+		return false, nil
+	}
+	return result == "1", nil
+}
+
 func (s *UserRedisStore) SaveJwt(email string, cert string, secret string) error {
 	key := "user:jwt:" + email
 	fields := map[string]interface{}{

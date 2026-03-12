@@ -55,10 +55,10 @@ func main() {
 	)
 
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
-	msgService := service.NewMessageService(msgStore, roomStore, connManager)
+	msgService := service.NewMessageService(msgStore, roomSrv, connManager)
 	wsServer := ws.NewWsServer(&gateway.ServerOpt{
 		ListenPort: wsServicePort,
-	}, connManager, msgService)
+	}, connManager, msgService, userSrv)
 
 	go func() {
 		if err := wsServer.Run(); err != nil {

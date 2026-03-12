@@ -21,6 +21,8 @@ type UserService interface {
 	Logout(userId string) error
 	DeleteUser(userId string) error
 	ListUsers(limit int) ([]*types.User, error)
+	SetOnlineStatus(userId string, online bool) error
+	GetOnlineStatus(userId string) (bool, error)
 }
 
 func NewUserService(dbStore store.UserStore, redisStore *store.UserRedisStore, sessionCleaner SessionCleaner) UserService {
@@ -112,4 +114,12 @@ func (s *defaultUserService) DeleteUser(userId string) error {
 
 func (s *defaultUserService) ListUsers(limit int) ([]*types.User, error) {
 	return s.dbStore.List(limit)
+}
+
+func (s *defaultUserService) SetOnlineStatus(userId string, online bool) error {
+	return s.redisStore.SetOnlineStatus(userId, online)
+}
+
+func (s *defaultUserService) GetOnlineStatus(userId string) (bool, error) {
+	return s.redisStore.GetOnlineStatus(userId)
 }

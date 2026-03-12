@@ -22,6 +22,7 @@ type WsConn struct {
 
 	onMessage gateway.ConnMessageCallback
 	onClose   gateway.ConnCloseCallback
+	onConnect gateway.ConnConnectCallback
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
@@ -30,9 +31,10 @@ type WsConn struct {
 
 var _ gateway.Conn = (*WsConn)(nil)
 
-func NewWsConn(id string, conn *websocket.Conn, onClose gateway.ConnCloseCallback, onMessage gateway.ConnMessageCallback) *WsConn {
+func NewWsConn(id string, conn *websocket.Conn, onConnect gateway.ConnConnectCallback, onClose gateway.ConnCloseCallback, onMessage gateway.ConnMessageCallback) *WsConn {
 	return &WsConn{
 		id:        id,
+		onConnect: onConnect,
 		onClose:   onClose,
 		onMessage: onMessage,
 		conn:      conn,
@@ -68,6 +70,8 @@ func (c *WsConn) Close() error {
 func (c *WsConn) Start() {
 	c.Read()
 	c.Write()
+	// 链接建立后，执行初始化
+	c.onConnect(c.id)
 }
 
 func (c *WsConn) Read() {

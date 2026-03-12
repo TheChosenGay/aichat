@@ -122,15 +122,16 @@ func (p *defaultMessagePender) UnPend(msgId string) error {
 
 type MessageService struct {
 	messageStore store.MessageStore
-	roomStore    store.RoomStore
+	roomService  RoomService
+	userService  UserService
 	router       MessageRouter
 	pender       MessagePender
 }
 
-func NewMessageService(messageStore store.MessageStore, roomStore store.RoomStore, router MessageRouter) *MessageService {
+func NewMessageService(messageStore store.MessageStore, roomService RoomService, router MessageRouter) *MessageService {
 	m := &MessageService{
 		messageStore: messageStore,
-		roomStore:    roomStore,
+		roomService:  roomService,
 		router:       router,
 	}
 
@@ -173,6 +174,7 @@ func (s *MessageService) retryMessage(message *types.Message) error {
 }
 
 func (s *MessageService) SendMessage(message *types.Message) error {
+
 	if message.ToId == "" && message.RoomId == "" {
 		return errors.New("to_id or room_id is required")
 	}
@@ -198,6 +200,11 @@ func (s *MessageService) SendMessage(message *types.Message) error {
 		return s.router.Route(message)
 	}
 
+	if online, err := s.userService.GetOnlineStatus(message.ToId); err != nil || !online {
+		// 用户不在线，那就不发了
+		return nil
+	}
+
 	// 普通消息
 	// 存入pender 待确认
 	if err := s.pender.Pend(message); err != nil {
@@ -208,9 +215,25 @@ func (s *MessageService) SendMessage(message *types.Message) error {
 }
 
 func (s *MessageService) sendGroupMessage(message *types.Message) error {
-	memberIds, err := s.roomStore.GetMembers(message.RoomId)
+	members, err := s.roomService.GetMembers(message.RoomId)
 	if err != nil {
 		return err
 	}
+
+	var memberIds []string
+	for _, member := range members {
+		memberIds = append(memberIds, member.Id)
+	}
 	return s.router.RouteGroup(message, memberIds)
+}
+
+func (s *MessageService) FetchHistoryMessages(toId string, limit int, currentTime int64) error {
+	messages, err := s.messageStore.FetchHistoryMessages(toId, currentTime, limit)
+	if err != nil {
+		return err
+	}
+	for _, message := range messages {
+		s.router.Route(message)
+	}
+	return nil
 }

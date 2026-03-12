@@ -15,19 +15,25 @@ import (
 )
 
 type WsServer struct {
-	opt         *gateway.ServerOpt
-	upgrader    *websocket.Upgrader
-	ConnManager *gateway.ConnManager
-	MessageSrv  *service.MessageService
-	validate    *validator.Validate
+	opt            *gateway.ServerOpt
+	upgrader       *websocket.Upgrader
+	ConnManager    *gateway.ConnManager
+	messageService *service.MessageService
+	userService    service.UserService
+	validate       *validator.Validate
 }
 
-func NewWsServer(opt *gateway.ServerOpt, connManager *gateway.ConnManager, messageService *service.MessageService) *WsServer {
+func NewWsServer(
+	opt *gateway.ServerOpt,
+	connManager *gateway.ConnManager,
+	messageService *service.MessageService,
+	userService service.UserService) *WsServer {
 	return &WsServer{
-		opt:         opt,
-		MessageSrv:  messageService,
-		ConnManager: connManager,
-		validate:    validator.New(),
+		opt:            opt,
+		messageService: messageService,
+		userService:    userService,
+		ConnManager:    connManager,
+		validate:       validator.New(),
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -63,7 +69,16 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		id,
 		c,
 		func(id string) {
+			slog.Info("user connect", "id", id)
+			// 主动拉取历史消息
+			if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
+				slog.Error("Failed to fetch history messages", "error", err.Error())
+				return
+			}
+		},
+		func(id string) {
 			s.ConnManager.RemoveConn(id)
+			s.userService.SetOnlineStatus(id, false)
 		},
 		func(data []byte) {
 			//gorilla/websocket会处理分片，返回的data []byte已经是完整的了
@@ -81,7 +96,7 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 				slog.Error("Failed to validate message", "error", err.Error())
 				return
 			}
-			if err := s.MessageSrv.SendMessage(&message); err != nil {
+			if err := s.messageService.SendMessage(&message); err != nil {
 				slog.Error("Failed to send message", "error", err.Error())
 				return
 			}
@@ -93,6 +108,8 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 		return
 	}
+	s.userService.SetOnlineStatus(id, true)
 	// 启动连接读写
 	conn.Start()
+
 }

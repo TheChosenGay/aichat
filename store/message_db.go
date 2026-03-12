@@ -13,7 +13,7 @@ INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_deliver
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 const ListMessagesByToIdSql = `
-SELECT msg_id, from_id, to_id,room_id, type, content, send_at, is_delivered
+SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id
 FROM messages
 WHERE to_id = ? AND send_at < ?
 ORDER BY send_at DESC
@@ -21,6 +21,15 @@ LIMIT ?
 `
 const UpdateMessageSql = `
 UPDATE messages SET is_delivered = ? WHERE msg_id = ?
+`
+
+const FetchHistoryMessagesSql = `
+SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id
+FROM messages
+WHERE to_id = ?
+	AND send_at <= ?
+ORDER BY send_at DESC 
+LIMIT ?
 `
 
 type MessageDbStore struct {
@@ -57,7 +66,7 @@ func (m *MessageDbStore) ListByToId(toId string, before int64, limit int) ([]*ty
 	var messages []*types.Message
 	for rows.Next() {
 		var message types.Message
-		err := rows.Scan(&message.MsgId, &message.FromId, &message.ToId, &message.Type, &message.Content, &message.SendAt, &message.IsDelivered)
+		err := rows.Scan(&message.MsgId, &message.FromId, &message.ToId, &message.Type, &message.Content, &message.SendAt, &message.IsDelivered, &message.RoomId)
 		if err != nil {
 			return nil, err
 		}
@@ -80,4 +89,32 @@ func (m *MessageDbStore) Update(message *types.Message) error {
 		return errors.New("no rows affected")
 	}
 	return nil
+}
+
+func (m *MessageDbStore) FetchHistoryMessages(toId string, before int64, limit int) ([]*types.Message, error) {
+	rows, err := m.db.QueryContext(context.Background(), FetchHistoryMessagesSql, toId, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var messages []*types.Message
+	for rows.Next() {
+		var message types.Message
+		var roomId sql.NullString
+		if err := rows.Scan(&message.MsgId,
+			&message.FromId,
+			&message.ToId,
+			&message.Type,
+			&message.Content,
+			&message.SendAt,
+			&message.IsDelivered,
+			&roomId); err != nil {
+			return nil, err
+		}
+		if roomId.Valid {
+			message.RoomId = roomId.String
+		}
+		messages = append(messages, &message)
+	}
+	return messages, nil
 }
