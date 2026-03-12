@@ -70,6 +70,7 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		c,
 		func(id string) {
 			slog.Info("user connect", "id", id)
+			s.userService.SetOnlineStatus(id, true)
 			// 主动拉取历史消息
 			if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
 				slog.Error("Failed to fetch history messages", "error", err.Error())
@@ -79,6 +80,10 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		func(id string) {
 			s.ConnManager.RemoveConn(id)
 			s.userService.SetOnlineStatus(id, false)
+		},
+		func(id string) {
+			// 收到pong，认为用户在线
+			s.userService.SetOnlineStatus(id, true)
 		},
 		func(data []byte) {
 			//gorilla/websocket会处理分片，返回的data []byte已经是完整的了
@@ -108,7 +113,6 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 		return
 	}
-	s.userService.SetOnlineStatus(id, true)
 	// 启动连接读写
 	conn.Start()
 

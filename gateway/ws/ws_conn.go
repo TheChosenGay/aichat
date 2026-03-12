@@ -23,6 +23,7 @@ type WsConn struct {
 	onMessage gateway.ConnMessageCallback
 	onClose   gateway.ConnCloseCallback
 	onConnect gateway.ConnConnectCallback
+	onPong    gateway.ConnPongCallback
 
 	closeOnce sync.Once
 	closeCh   chan struct{}
@@ -31,10 +32,11 @@ type WsConn struct {
 
 var _ gateway.Conn = (*WsConn)(nil)
 
-func NewWsConn(id string, conn *websocket.Conn, onConnect gateway.ConnConnectCallback, onClose gateway.ConnCloseCallback, onMessage gateway.ConnMessageCallback) *WsConn {
+func NewWsConn(id string, conn *websocket.Conn, onConnect gateway.ConnConnectCallback, onPong gateway.ConnPongCallback, onClose gateway.ConnCloseCallback, onMessage gateway.ConnMessageCallback) *WsConn {
 	return &WsConn{
 		id:        id,
 		onConnect: onConnect,
+		onPong:    onPong,
 		onClose:   onClose,
 		onMessage: onMessage,
 		conn:      conn,
@@ -80,6 +82,7 @@ func (c *WsConn) Read() {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		// 收到pong时续期
 		c.conn.SetPongHandler(func(string) error {
+			c.onPong(c.id)
 			c.conn.SetReadDeadline(time.Now().Add(pongWait))
 			slog.Info("receive pong message from ", c.Id())
 			return nil

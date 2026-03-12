@@ -3,6 +3,7 @@ package gateway
 type ConnCloseCallback func(id string)
 type ConnMessageCallback func(data []byte)
 type ConnConnectCallback func(id string) // user id
+type ConnPongCallback func(id string)
 
 // Conn define the behavior of a long-lived connection
 type Conn interface {
