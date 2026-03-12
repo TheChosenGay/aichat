@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"io"
+	"net/http"
 )
 
 type APIRespCode int
@@ -20,7 +20,9 @@ type APIResponse struct {
 	Msg  string `json:"msg"`
 }
 
-func OK(w io.Writer, data any) error {
+func OK(w http.ResponseWriter, data any) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	return json.NewEncoder(w).Encode(
 		APIResponse{
 			Code: int(APIRespCodeOK),
@@ -29,7 +31,9 @@ func OK(w io.Writer, data any) error {
 		})
 }
 
-func Fail(w io.Writer, code APIRespCode, msg string) error {
+func Fail(w http.ResponseWriter, code APIRespCode, msg string) error {
+	w.WriteHeader(int(code))
+	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(
 		APIResponse{
 			Code: int(code),
@@ -38,14 +42,14 @@ func Fail(w io.Writer, code APIRespCode, msg string) error {
 		})
 }
 
-func BadRequest(w io.Writer, msg string) error {
+func BadRequest(w http.ResponseWriter, msg string) error {
 	return Fail(w, APIRespCodeBadRequest, msg)
 }
 
-func Unauthorized(w io.Writer, msg string) error {
+func Unauthorized(w http.ResponseWriter, msg string) error {
 	return Fail(w, APIRespCodeUnauthorized, msg)
 }
 
-func InternalError(w io.Writer, msg string) error {
+func InternalError(w http.ResponseWriter, msg string) error {
 	return Fail(w, APIRespCodeInternalError, msg)
 }
