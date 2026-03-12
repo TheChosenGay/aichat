@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -38,10 +37,7 @@ func (s *RoomServer) RegisterHandler(mx *mux.Router) {
 func (s *RoomServer) createRoomHandler(w http.ResponseWriter, r *http.Request) {
 	req := &CreateRoomRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
 	room := &types.Room{
@@ -52,20 +48,13 @@ func (s *RoomServer) createRoomHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.roomService.CreateRoom(room); err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
 
-	if err := WriteToJson(w, map[string]any{
-		"code": 0,
+	OK(w, map[string]any{
 		"room": room,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	})
 }
 
 func (s *RoomServer) getRoomHandler(w http.ResponseWriter, r *http.Request) {
@@ -73,19 +62,12 @@ func (s *RoomServer) getRoomHandler(w http.ResponseWriter, r *http.Request) {
 	roomId := vars["room_id"]
 	room, err := s.roomService.GetRoomById(roomId)
 	if err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
-	if err := WriteToJson(w, map[string]any{
-		"code": 0,
+	OK(w, map[string]any{
 		"room": room,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	})
 }
 
 func (s *RoomServer) addMemberToRoomHandler(w http.ResponseWriter, r *http.Request) {
@@ -94,19 +76,10 @@ func (s *RoomServer) addMemberToRoomHandler(w http.ResponseWriter, r *http.Reque
 	memberId := vars["member_id"]
 	err := s.roomService.AddMemberToRoom(roomId, memberId)
 	if err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
-	if err := WriteToJson(w, map[string]any{
-		"code":    0,
-		"message": "success",
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	OK(w, nil)
 }
 
 func (s *RoomServer) removeMemberFromRoomHandler(w http.ResponseWriter, r *http.Request) {
@@ -115,19 +88,10 @@ func (s *RoomServer) removeMemberFromRoomHandler(w http.ResponseWriter, r *http.
 	memberId := vars["member_id"]
 	err := s.roomService.RemoveMemberFromRoom(roomId, memberId)
 	if err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
-	if err := WriteToJson(w, map[string]any{
-		"code":    0,
-		"message": "success",
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	OK(w, nil)
 }
 
 func (s *RoomServer) getMembersHandler(w http.ResponseWriter, r *http.Request) {
@@ -135,17 +99,10 @@ func (s *RoomServer) getMembersHandler(w http.ResponseWriter, r *http.Request) {
 	roomId := vars["room_id"]
 	members, err := s.roomService.GetMembers(roomId)
 	if err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
-	if err := WriteToJson(w, map[string]any{
-		"code":    0,
+	OK(w, map[string]any{
 		"members": members,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	})
 }

@@ -18,6 +18,7 @@ const (
 	ErrUserCreate ErrorOptType = "user create"
 	ErrUserLogin  ErrorOptType = "user login"
 	ErrUserList   ErrorOptType = "user list"
+	ErrUserLogout ErrorOptType = "user logout"
 )
 
 var (

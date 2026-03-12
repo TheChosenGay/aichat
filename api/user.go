@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -64,10 +63,7 @@ func (u *UserServer) RegisterHandler(mx *mux.Router) {
 func (u *UserServer) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	req := &CreateRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
 	email := req.Email
@@ -81,72 +77,52 @@ func (u *UserServer) createUserHandler(w http.ResponseWriter, r *http.Request) {
 	slog.Info("create user", "id", uid)
 	if err := validator.New().Struct(user); err != nil {
 		slog.Error("Failed to validate user", "error", err.Error())
-		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserCreate, service.ErrParamInvalid).String(), http.StatusBadRequest)
+		BadRequest(w, service.NewError(service.ErrServiceUser, service.ErrUserCreate, service.ErrParamInvalid).Error())
 		return
 	}
 
 	// save user to database
 	if err := u.userService.CreateUser(user); err != nil {
 		slog.Error("Failed to create user", "error", err.Error())
-		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserCreate, err).String(), http.StatusInternalServerError)
+		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserCreate, err).Error())
 		return
 	}
 
-	if err := WriteToJson(w, map[string]any{
-		"code": 0,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	OK(w, nil)
 }
 
 // post address:port/user/login?id=xxx&password=xxx
 func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	req := &LoginRequest{}
 	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-		WriteToJson(w, map[string]any{
-			"code":  1,
-			"error": err.Error(),
-		})
+		BadRequest(w, err.Error())
 		return
 	}
 	email := req.Email
 	password := req.Password
 
 	if email == "" || password == "" {
-		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, service.ErrParamInvalid).String(), http.StatusBadRequest)
+		BadRequest(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, service.ErrParamInvalid).Error())
 		return
 	}
 	jwtToken, err := u.userService.LoginByEmail(email, password)
 	if err != nil {
-		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, err).String(), http.StatusInternalServerError)
+		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, err).Error())
 		return
 	}
 
-	if err := WriteToJson(w, map[string]any{
-		"code":     0,
+	OK(w, map[string]any{
 		"jwtToken": jwtToken,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	})
 }
 
 func (u *UserServer) logoutHandler(w http.ResponseWriter, r *http.Request) {
 	userId := r.Context().Value(middleware.UserIdKey).(string)
 	if err := u.userService.Logout(userId); err != nil {
-		WriteToJson(w, map[string]any{
-			"code": 1,
-		})
+		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserLogout, err).Error())
 		return
 	}
-	if err := WriteToJson(w, map[string]any{
-		"code":   0,
-		"logout": true,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
+	OK(w, nil)
 }
 
 // get address:port/user/list/{limit}
@@ -154,27 +130,16 @@ func (u *UserServer) listUserHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	limit, err := strconv.Atoi(vars["limit"])
 	if err != nil {
-		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserList, err).String(), http.StatusBadRequest)
+		BadRequest(w, service.NewError(service.ErrServiceUser, service.ErrUserList, err).Error())
 		return
 	}
 	users, err := u.userService.ListUsers(limit)
 	if err != nil {
-		http.Error(w, service.NewError(service.ErrServiceUser, service.ErrUserList, err).String(), http.StatusInternalServerError)
+		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserList, err).Error())
 		return
 	}
 
-	if err := WriteToJson(w, map[string]any{
-		"code":  0,
+	OK(w, map[string]any{
 		"users": users,
-	}); err != nil {
-		slog.Error("Failed to write to json", "error", err.Error())
-		return
-	}
-}
-
-func WriteToJson(w io.Writer, v any) error {
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		return err
-	}
-	return nil
+	})
 }
