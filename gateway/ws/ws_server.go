@@ -71,11 +71,13 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		func(id string) {
 			slog.Info("user connect", "id", id)
 			s.userService.SetOnlineStatus(id, true)
-			// 主动拉取历史消息
-			if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
-				slog.Error("Failed to fetch history messages", "error", err.Error())
-				return
-			}
+
+			go func() {
+				if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
+					slog.Error("Failed to fetch history messages", "error", err.Error())
+					return
+				}
+			}()
 		},
 		func(id string) {
 			s.ConnManager.RemoveConn(id)

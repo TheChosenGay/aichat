@@ -128,11 +128,12 @@ type MessageService struct {
 	pender       MessagePender
 }
 
-func NewMessageService(messageStore store.MessageStore, roomService RoomService, router MessageRouter) *MessageService {
+func NewMessageService(messageStore store.MessageStore, roomService RoomService, router MessageRouter, userService UserService) *MessageService {
 	m := &MessageService{
 		messageStore: messageStore,
 		roomService:  roomService,
 		router:       router,
+		userService:  userService,
 	}
 
 	m.pender = NewMessagePender(MessagePendOpts{

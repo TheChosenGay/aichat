@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	writeWait  = 10 * time.Second
-	pongWait   = 60 * time.Second
-	pingPeriod = (pongWait * 9) / 10
+	writeWait   = 10 * time.Second
+	pongWait    = 60 * time.Second
+	pingPeriod  = (pongWait * 9) / 10
+	writeChSize = 256 // 消息写缓冲大小，容纳约 0.5s 的突发
 )
 
 type WsConn struct {
@@ -42,7 +43,7 @@ func NewWsConn(id string, conn *websocket.Conn, onConnect gateway.ConnConnectCal
 		conn:      conn,
 		closeOnce: sync.Once{},
 		closeCh:   make(chan struct{}),
-		writeCh:   make(chan []byte, 20),
+		writeCh:   make(chan []byte, writeChSize),
 	}
 }
 
@@ -56,6 +57,9 @@ func (c *WsConn) Push(data []byte) error {
 		return nil
 	case <-c.closeCh:
 		return errors.New("connection closed")
+	default:
+		// writeCh 满时立即丢弃，由 pender 重试兜底；避免 time.After 的 GC 压力
+		return errors.New("write channel full, message dropped")
 	}
 }
 
@@ -84,7 +88,7 @@ func (c *WsConn) Read() {
 		c.conn.SetPongHandler(func(string) error {
 			c.onPong(c.id)
 			c.conn.SetReadDeadline(time.Now().Add(pongWait))
-			slog.Info("WsConn", "receive pong message from ", c.Id())
+			// slog.Info("WsConn", "receive pong message from ", c.Id())
 			return nil
 		})
 

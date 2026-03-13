@@ -84,26 +84,25 @@ func NewUserRedisStore(opts ...UserRedisStoreOptFunc) *UserRedisStore {
 }
 
 func (s *UserRedisStore) SetOnlineStatus(userId string, online bool) error {
-	key := "user:onlien:" + userId
+	key := "user:online:" + userId
 	ctx := context.Background()
-
-	if err := s.redis.Set(ctx, key, online, 60*time.Second).Err(); err != nil {
+	if !online {
+		return s.redis.Del(ctx, key).Err()
+	}
+	if err := s.redis.Set(ctx, key, "1", 60*time.Second).Err(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *UserRedisStore) GetOnlineStatus(userId string) (bool, error) {
-	key := "user:onlien:" + userId
+	key := "user:online:" + userId
 	ctx := context.Background()
 	result, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
-		return false, err
+		return false, nil // key 不存在视为离线
 	}
-	if result == "" {
-		return false, nil
-	}
-	return result == "1", nil
+	return result != "", nil
 }
 
 func (s *UserRedisStore) SaveJwt(email string, cert string, secret string) error {

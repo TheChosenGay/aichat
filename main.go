@@ -55,7 +55,7 @@ func main() {
 	)
 
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
-	msgService := service.NewMessageService(msgStore, roomSrv, connManager)
+	msgService := service.NewMessageService(msgStore, roomSrv, connManager, userSrv)
 	wsServer := ws.NewWsServer(&gateway.ServerOpt{
 		ListenPort: wsServicePort,
 	}, connManager, msgService, userSrv)

@@ -20,36 +20,35 @@ type APIResponse struct {
 	Msg  string `json:"msg"`
 }
 
-func OK(w http.ResponseWriter, data any) error {
+func writeJSON(w http.ResponseWriter, httpStatus int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	return json.NewEncoder(w).Encode(
-		APIResponse{
-			Code: int(APIRespCodeOK),
-			Data: data,
-			Msg:  "success",
-		})
+	w.WriteHeader(httpStatus)
+	json.NewEncoder(w).Encode(v)
 }
 
-func Fail(w http.ResponseWriter, code APIRespCode, msg string) error {
-	w.WriteHeader(int(code))
-	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(
-		APIResponse{
-			Code: int(code),
-			Data: nil,
-			Msg:  msg,
-		})
+func OK(w http.ResponseWriter, data any) {
+	writeJSON(w, http.StatusOK, APIResponse{
+		Code: int(APIRespCodeOK),
+		Data: data,
+		Msg:  "success",
+	})
 }
 
-func BadRequest(w http.ResponseWriter, msg string) error {
-	return Fail(w, APIRespCodeBadRequest, msg)
+func Fail(w http.ResponseWriter, code APIRespCode, msg string) {
+	writeJSON(w, int(code), APIResponse{
+		Code: int(code),
+		Msg:  msg,
+	})
 }
 
-func Unauthorized(w http.ResponseWriter, msg string) error {
-	return Fail(w, APIRespCodeUnauthorized, msg)
+func BadRequest(w http.ResponseWriter, msg string) {
+	Fail(w, APIRespCodeBadRequest, msg)
 }
 
-func InternalError(w http.ResponseWriter, msg string) error {
-	return Fail(w, APIRespCodeInternalError, msg)
+func Unauthorized(w http.ResponseWriter, msg string) {
+	Fail(w, APIRespCodeUnauthorized, msg)
+}
+
+func InternalError(w http.ResponseWriter, msg string) {
+	Fail(w, APIRespCodeInternalError, msg)
 }
