@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/TheChosenGay/aichat/types"
+	"golang.org/x/sync/errgroup"
 )
 
 type ConnManager struct {
@@ -73,18 +74,23 @@ func (c *ConnManager) RouteGroup(message *types.Message, memberIds []string) err
 		return err
 	}
 
+	g := errgroup.Group{}
+	g.SetLimit(40)
 	for _, memberId := range memberIds {
-		if memberId == message.FromId {
-			continue
-		}
+		g.Go(func() error {
+			if memberId == message.FromId {
+				return nil
+			}
 
-		conn, err := c.GetConn(memberId)
-		if err != nil {
-			// 用户不在线，目前静默处理
-			continue
-		}
-		// 如果失败了，目前静默处理
-		conn.Push(data)
+			conn, err := c.GetConn(memberId)
+			if err != nil {
+				// 用户不在线，目前静默处理
+				return nil
+			}
+			// 如果失败了，目前静默处理
+			conn.Push(data)
+			return nil
+		})
 	}
-	return nil
+	return g.Wait()
 }

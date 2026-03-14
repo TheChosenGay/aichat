@@ -389,7 +389,246 @@ OnMsgRetry: func(msg *types.Message) error {
 
 ---
 
-## 九、后续可补充的压测场景
+## 九、pprof 可视化（火焰图）
+
+### 采集 + 启动 UI 的完整流程
+
+```bash
+# 第一步：压测运行中采集 CPU profile（30s）
+# 注意：必须在压测进行中执行，空载下 profile 几乎没数据
+curl -o /tmp/cpu.prof "http://127.0.0.1:6060/debug/pprof/profile?seconds=30"
+
+# 第二步：启动可视化 UI（用 nohup 保持后台运行）
+nohup go tool pprof -http=127.0.0.1:8888 /tmp/cpu.prof > /tmp/pprof_ui.log 2>&1 &
+
+# 第三步：浏览器打开
+# http://127.0.0.1:8888/ui/flamegraph
+```
+
+其他 profile 同理：
+
+```bash
+# heap 内存分析
+curl -o /tmp/heap.prof http://127.0.0.1:6060/debug/pprof/heap
+nohup go tool pprof -http=127.0.0.1:8888 /tmp/heap.prof > /tmp/pprof_ui.log 2>&1 &
+
+# goroutine 分析
+curl -o /tmp/goroutine.prof "http://127.0.0.1:6060/debug/pprof/goroutine"
+nohup go tool pprof -http=127.0.0.1:8888 /tmp/goroutine.prof > /tmp/pprof_ui.log 2>&1 &
+```
+
+### 浏览器视图说明
+
+打开 `http://127.0.0.1:8888` 后，左上角菜单切换：
+
+| 视图 | 路径 | 用途 |
+|------|------|------|
+| **Flame Graph** | `/ui/flamegraph` | 火焰图，最直观，**优先看这个** |
+| **Top** | `/ui/top` | 函数 CPU/内存占用排名 |
+| **Graph** | `/ui/graph` | 函数调用关系图（需要 graphviz） |
+| **Source** | `/ui/source` | 逐行 CPU 占用，定位热点代码行 |
+
+安装 graphviz（Graph 视图需要）：
+
+```bash
+brew install graphviz
+```
+
+### 火焰图怎么看
+
+```
+宽度 = CPU 时间占比，越宽越是热点
+纵向 = 调用栈深度，从下往上是调用关系
+点击色块 = 下钻到该函数的子调用
+```
+
+重点关注以下函数是否出现在宽色块中：
+
+| 函数 | 说明 |
+|------|------|
+| `WriteMessage` / `ReadMessage` | WebSocket IO 占比 |
+| `json.Marshal` / `json.Unmarshal` | 序列化开销 |
+| `sync.(*Mutex).Lock` | 锁竞争（pender 全局锁） |
+| `redis.*` | 每条消息查 Redis 的开销 |
+| `bcrypt.*` | 登录时的密码哈希（应该只在 login 阶段出现） |
+
+### 注意事项
+
+- **profile 文件需要在压测高峰期采集**，空载下数据无意义
+- 同一时间只能跑一个 pprof UI（端口 8888 冲突），切换 profile 时先 `pkill pprof`
+- block 和 mutex profile 需要在 `main.go` 里提前开启采样率才有数据：
+
+```go
+runtime.SetBlockProfileRate(1)
+runtime.SetMutexProfileFraction(1)
+```
+
+---
+
+## 十、pprof 接入 + 稳定性压测
+
+### pprof 接入（main.go）
+
+```go
+import (
+    "net/http"
+    _ "net/http/pprof"  // 注册所有 pprof 路由到 DefaultServeMux
+    "runtime"
+)
+
+// 在 main() 里加：
+runtime.SetBlockProfileRate(1)       // 开启 block 采样（默认关闭）
+runtime.SetMutexProfileFraction(1)   // 开启 mutex 采样（默认关闭）
+
+go func() {
+    slog.Info("pprof server", "addr", ":6060")
+    http.ListenAndServe(":6060", nil)
+}()
+```
+
+可用端点：
+
+| 端点 | 用途 |
+|------|------|
+| `/debug/pprof/goroutine` | goroutine 快照，查泄漏 |
+| `/debug/pprof/heap` | 堆内存，查分配热点和泄漏 |
+| `/debug/pprof/profile?seconds=30` | CPU 采样 30s |
+| `/debug/pprof/block` | goroutine 阻塞等待分析 |
+| `/debug/pprof/mutex` | mutex 竞争分析 |
+
+---
+
+### 稳定性压测配置（ws_stability.js）
+
+```
+500 VU，30s 爬升 → 保持 9min → 30s 降到 0
+每 VU 每 5s 发一条消息（低频，模拟正常在线用户）
+```
+
+### goroutine 数量对比
+
+| 时间点 | goroutine 数 | 说明 |
+|--------|-------------|------|
+| 压测前（空载） | 9 | 基线 |
+| 爬升完成（500 VU） | 1509 | 500×2(Read+Write) + 基线 |
+| 压测中段（5min） | 1510 | 与峰值基本持平，无增长 |
+| 压测结束后 | 10 | 几乎回到基线，仅多 1 个 |
+
+**结论：无 goroutine 泄漏。** 连接断开后 Read/Write goroutine 均正确退出。
+
+### 压测最终结果
+
+```
+✓ stability_msgs_sent  count=54811  (阈值 >10000)
+✓ ws_connecting        p(99)=556µs  (阈值 <2s)
+
+ws_connecting:       avg=313µs  p(95)=346µs  max=23.57ms
+ws_session_duration: avg=54s    (pongWait=60s 触发重连，符合预期)
+http_req_duration:   avg=47.7ms p(95)=52.5ms
+http_req_failed:     0.00%  (登录全部成功)
+ws_sessions:         5541  (500VU × 多轮重连)
+```
+
+### 关于 1006 连接断开
+
+压测中每隔约 60s 出现批量 1006（abnormal closure），原因：
+
+- 脚本发的消息 `ToId` 为空，被服务端验证拒绝，Write goroutine 实际上没有有效消息要写
+- `pongWait=60s`：服务端等待 Pong，60s 内若读不到任何帧（含 Pong）就关闭连接
+- k6 会自动响应 Ping 帧，但 Ping 是由服务端 Write goroutine 每 54s 发一次，而 Write goroutine 发 Ping 需要获取 `writeCh` — 由于没有消息写入，Ping 正常发出
+
+**真正根因**：脚本里 `socket.setTimeout(() => socket.close(), 600000)` 只有在 ws.connect 回调成功时才生效。VU 在 `ramping-vus` 模式下会循环执行 default function，每次执行都会重新 login+建连+在 60s 后断开。这是**脚本的预期行为**，每个 VU 平均每 60s 重连一次，所以总 ws_sessions=5541 ≈ 500VU × 11轮。
+
+**对稳定性测试的影响**：反而是更好的测试——反复建连/断连，goroutine 依然没有泄漏，说明连接生命周期管理是正确的。
+
+### 已发现的环境问题
+
+机器开启了 VPN/网络隧道，导致 k6 向 `localhost:8081` 发请求时被路由到远端 IP `10.88.137.67:8081`（一台跑着 Tomcat 的机器）。
+
+**修复**：在 `.env` 里将监听地址从 `:8081` 改为 `127.0.0.1:8081`，强制只接受 loopback 连接：
+
+```
+USER_SERVICE_LISTEN_PORT=127.0.0.1:8081
+GATEWAY_SERVICE_LISTEN_PORT=127.0.0.1:8082
+```
+
+---
+
+## 十一、pprof 的意义与正确使用姿势
+
+### pprof 解决什么问题
+
+**核心价值：在你不知道瓶颈在哪时，帮你找到它。**
+
+手动埋点的前提是你已经猜到慢在哪里，但现实中一个请求经过十几层调用，靠猜往往猜错方向。pprof 让你不用猜，直接看全局视图。
+
+### pprof vs 手动埋点
+
+| | pprof | 手动埋点 |
+|---|---|---|
+| 用途 | **发现**未知瓶颈 | **精确测量**已知路径 |
+| 侵入性 | 零改动 | 需要修改代码 |
+| 粒度 | 函数级 / 行级 | 你埋在哪就测哪 |
+| 适用阶段 | **排查阶段** | **验证阶段** |
+| 能看第三方库内部 | 能 | 不能 |
+
+### 正确的工作流
+
+```
+pprof 发现问题 → 手动埋点验证 → 优化 → pprof 确认改善
+```
+
+两者不是替代关系，是串联关系。先用 pprof 找方向，再用埋点量化。
+
+### 本项目的实际发现
+
+通过 CPU profile 发现：
+
+```
+SendMessage (cum=1.13s)
+├── slog.TextHandler     0.89s  ← 和 MySQL 几乎持平，靠猜想不到
+├── MessageDbStore.Save  0.86s  ← MySQL INSERT
+└── redis._process       0.26s  ← Redis GET 在线状态
+```
+
+**slog 日志输出和 MySQL 写入耗时相当** —— 这是靠猜猜不到的结论。`TextHandler` 每条日志都做字符串格式化、时间格式化、反射，高并发下累积显著。如果没有 pprof，可能只会去优化 MySQL，完全忽略这个隐藏热点。
+
+### pprof 真正发光的场景
+
+| 场景 | 用哪个 profile |
+|------|--------------|
+| CPU 热点（哪个函数最耗时） | `profile?seconds=30` |
+| 内存泄漏（哪里在持续分配） | `heap` |
+| goroutine 泄漏（哪些 goroutine 卡住了） | `goroutine` |
+| 锁竞争（哪把锁最热） | `mutex` |
+| goroutine 阻塞等待（channel、IO） | `block` |
+
+### cum vs flat 的含义
+
+pprof 是**采样**，不是计时器。每 10ms 暂停程序记录调用栈，统计出现次数：
+
+```
+样本数 × 10ms = 估算耗时
+```
+
+- `flat`：该函数自身代码在栈顶的采样数（自身执行时间）
+- `cum`：调用栈中包含该函数的采样数（含所有子调用）
+
+`SendMessage` 的 `flat=0, cum=1.13s` 意思是：SendMessage 自身没有执行耗时（它只是调用子函数），但它的子调用（slog、MySQL、Redis）在跑时，调用栈里都有 `SendMessage` 这一帧，累计起来是 1.13s。
+
+**注意**：cum 不是单次调用花了 1.13s，而是 25s 采样期间所有调用该函数的样本之和。
+
+### 真实单次延迟怎么测
+
+pprof CPU profile 不适合测单次延迟，应该用：
+
+1. **手动埋点**：`time.Since(start)` 打日志，临时加、测完删
+2. **k6 自定义指标**：在压测脚本里记录消息从发出到收到的 RTT
+3. **Prometheus Histogram**：生产环境长期监控 P99 延迟
+
+---
+
+## 十二、后续可补充的压测场景
 
 - **稳定性**：保持 500 连接运行 10 分钟，观察内存和 goroutine 是否泄漏（配合 pprof）
 - **群聊广播**：100 人群聊，1 条消息触发 99 次推送，测试广播性能

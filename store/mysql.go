@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
@@ -46,10 +47,14 @@ func NewMysqlInstance() *sql.DB {
 		os.Getenv("MYSQL_DATABASE"))
 
 	db, err = sql.Open("mysql", dsn)
-
 	if err != nil {
 		panic(err)
 	}
+
+	// 连接池配置
+	db.SetMaxOpenConns(25)              // 最大打开连接数
+	db.SetMaxIdleConns(10)              // 最大空闲连接数
+	db.SetConnMaxLifetime(time.Minute * 5) // 连接最长存活时间，避免 MySQL 8h 超时断开
 
 	if err := db.Ping(); err != nil {
 		panic(err)

@@ -123,6 +123,19 @@ MessageService.SendMessage
 
 ## 四、群聊消息扇出实现
 
+### Week 10 优化：串行改并发
+
+原始实现是串行推送，100 人群聊一条消息需要等 100 次 `Push` 依次完成：
+
+```go
+// ❌ 串行：N 个成员逐一推送
+for _, memberId := range memberIds {
+    conn.Push(data)
+}
+```
+
+**Week 10 改为 errgroup 并发推送：**
+
 ```go
 // gateway/conn_manager.go
 func (c *ConnManager) RouteGroup(message *types.Message, memberIds []string) error {
@@ -131,19 +144,36 @@ func (c *ConnManager) RouteGroup(message *types.Message, memberIds []string) err
     if err != nil {
         return err
     }
+
+    g := errgroup.Group{}
+    g.SetLimit(40)  // 限制并发 goroutine 数，防止大群时调度器压力过大
     for _, memberId := range memberIds {
-        if memberId == message.FromId {
-            continue  // 不推给发送者自己
-        }
-        conn, err := c.GetConn(memberId)
-        if err != nil {
-            continue  // 不在线，静默跳过，消息已存库等离线拉取
-        }
-        conn.Push(data)
+        g.Go(func() error {
+            if memberId == message.FromId {
+                return nil  // 不推给发送者自己
+            }
+            conn, err := c.GetConn(memberId)
+            if err != nil {
+                return nil  // 不在线，静默跳过
+            }
+            conn.Push(data)
+            return nil
+        })
     }
-    return nil
+    return g.Wait()
 }
 ```
+
+**关键细节：**
+
+- `g.SetLimit(40)`：100 人群聊最多同时跑 40 个 goroutine，不是 100 个，保护调度器
+- `g.Wait()`：必须等所有 goroutine 完成再返回，否则函数提前返回，goroutine 在后台飘着，`SetLimit` 的限制形同虚设
+- `return nil`（不 return error）：群推送是广播语义，每个成员独立，一个失败不影响其他人
+- Go 1.22+ 不需要 `memberId := memberId`，循环变量每次迭代自动独立
+
+**为什么不用「一个失败全部取消」：**
+
+群聊推送是广播，每个成员是独立接收者，没有事务依赖。`errgroup.WithContext` 的取消语义适合事务型操作（如转账），不适合广播。失败的成员由 pender 重试兜底，其他成员不应受影响。
 
 **踩坑：`json.Marshal` 不能放在循环内**
 
@@ -275,7 +305,56 @@ migrate -path store/migrations \
 
 ---
 
-## 十、未来演进路径
+## 十、群消息可靠性策略
+
+### 现状：群消息无 pending
+
+1v1 消息有完整的 pender + ACK 重试机制，但群消息目前没有。
+
+### 为什么不直接套用 1v1 的 pender？
+
+1v1 pender 以 `MsgId` 为 key，一条消息对应一条 pending 记录。群消息发给 N 个人，如果按 `toId` 分别追踪，需要 N 条 pending 记录，`MsgId` 必须区分（同一条消息对不同接收者是不同的 pending）。
+
+两种实现思路：
+
+| 思路 | 做法 | 优点 | 缺点 |
+|------|------|------|------|
+| 拆分消息 | 每个接收者克隆一条消息，生成新 MsgId | 复用现有 pender 逻辑 | 存储膨胀（100 人群存 100 条）；客户端 MsgId 与发送方不一致 |
+| 独立 GroupPender | key = `MsgId:ToId`，单独实现 | 存储不膨胀，语义清晰 | 需要新增 pender 实现 |
+
+### 当前决策：不做群消息 pending，依靠客户端拉取兜底
+
+**理由：**
+
+1. 群消息 ACK 实现成本比 1v1 高一个量级
+2. 主流 IM（微信、钉钉）对群消息的可靠性保证也是**尽力投递**，不是严格 ACK
+3. 消息已持久化到 MySQL，用户随时可以通过历史消息接口补拉
+
+### 分层可靠性策略
+
+| 消息类型 | 可靠性策略 | 兜底手段 |
+|---------|-----------|--------|
+| 1v1 消息 | 服务端 pender + ACK 重试 | 离线拉取 |
+| 群消息 | 尽力投递（并发推送） | 客户端主动拉取历史消息 |
+
+### 未来如果要做群消息 pending
+
+推荐「独立 GroupPender」方案，key = `MsgId:ToId`：
+
+```go
+type GroupPendMessage struct {
+    msgId      string
+    toId       string
+    retryCount int
+    lastRetryAt int64
+    msg        *types.Message
+}
+// map key: msgId + ":" + toId
+```
+
+---
+
+## 十一、未来演进路径
 
 | 阶段 | 问题 | 方案 |
 |------|------|------|

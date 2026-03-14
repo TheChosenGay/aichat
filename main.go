@@ -2,7 +2,10 @@ package main
 
 import (
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof" // 注册 pprof 路由到 DefaultServeMux
 	"os"
+	"runtime"
 
 	"github.com/TheChosenGay/aichat/api"
 	"github.com/TheChosenGay/aichat/gateway"
@@ -27,6 +30,10 @@ func main() {
 		return
 	}
 
+	// 开启 block 和 mutex 采样，pprof 才能采集到阻塞和锁竞争数据
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+
 	userServicePort := os.Getenv("USER_SERVICE_LISTEN_PORT")
 	slog.Info("User service port", "port", userServicePort)
 	db := store.NewMysqlInstance()
@@ -40,6 +47,9 @@ func main() {
 	msgStore := store.NewMessageDbStore(db)
 	roomStore := store.NewRoomDbStore(db)
 
+	relationDbStore := store.NewRelationshipDbStore(db)
+	relationSrv := service.NewRelationshipService(relationDbStore)
+
 	connManager := gateway.NewConnManager()
 	userSrv := service.NewUserService(userDbStore, userRedisStore, connManager)
 	roomSrv := service.NewRoomService(roomStore, userDbStore)
@@ -52,6 +62,9 @@ func main() {
 			ListenPort: userServicePort,
 		}),
 		api.NewRoomServer(roomSrv),
+		api.NewRelationServer(api.RelationServerOpt{
+			ListenPort: userServicePort,
+		}, relationSrv),
 	)
 
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
@@ -64,6 +77,14 @@ func main() {
 		if err := wsServer.Run(); err != nil {
 			slog.Error("Failed to run ws server", "error", err)
 			return
+		}
+	}()
+
+	// pprof 独立端口，仅内部使用
+	go func() {
+		slog.Info("pprof server", "addr", ":6060")
+		if err := http.ListenAndServe(":6060", nil); err != nil {
+			slog.Error("pprof server failed", "error", err)
 		}
 	}()
 
