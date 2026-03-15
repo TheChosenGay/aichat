@@ -15,10 +15,13 @@ const (
 type ErrorOptType string
 
 const (
-	ErrUserCreate ErrorOptType = "user create"
-	ErrUserLogin  ErrorOptType = "user login"
-	ErrUserList   ErrorOptType = "user list"
-	ErrUserLogout ErrorOptType = "user logout"
+	ErrUserCreate              ErrorOptType = "user create"
+	ErrUserLogin               ErrorOptType = "user login"
+	ErrUserList                ErrorOptType = "user list"
+	ErrUserLogout              ErrorOptType = "user logout"
+	ErrUserUpdateAvatarUrl     ErrorOptType = "user update avatar url"
+	ErrUserGetAvatarUrl        ErrorOptType = "user get avatar url"
+	ErrUserPresignUploadAvatar ErrorOptType = "user presign upload avatar"
 )
 
 var (

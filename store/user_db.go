@@ -11,28 +11,35 @@ import (
 )
 
 const InsertUserSql = `
-INSERT INTO users (id, email, name, password, is_valid, create_at, birth_at, update_at, sex)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO users (id, email, name, password, is_valid, create_at, birth_at, update_at, sex, avatar_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 const GetUserByIdSql = `
-SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
+SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex, avatar_url
 FROM users
 WHERE id = ?
 `
 
 const GetUserByEmailSql = `
-SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
+SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex, avatar_url
 FROM users
 WHERE email = ?
 `
 
-
 const ListUserSql = `
-SELECT id, email, name, is_valid, create_at, birth_at, update_at, sex
+SELECT id, email, name, is_valid, create_at, birth_at, update_at, sex, avatar_url
 FROM users
 ORDER BY create_at DESC
 LIMIT ?
+`
+
+const UpdateAvatarUrlSql = `
+UPDATE users SET avatar_url = ? WHERE id = ?
+`
+
+const GetAvatarUrlSql = `
+SELECT avatar_url FROM users WHERE id = ?
 `
 
 type UserDbStore struct {
@@ -46,7 +53,7 @@ func NewUserDbStore(db *sql.DB) *UserDbStore {
 }
 
 func (s *UserDbStore) Save(user *types.User) error {
-	result, err := s.db.Exec(InsertUserSql, user.Id, user.Email, user.Name, user.Password, user.IsValid, user.CreateAt, user.BirthAt, user.UpdateAt, user.Sex)
+	result, err := s.db.Exec(InsertUserSql, user.Id, user.Email, user.Name, user.Password, user.IsValid, user.CreateAt, user.BirthAt, user.UpdateAt, user.Sex, user.AvatarUrl)
 	if err != nil {
 		return err
 	}
@@ -66,7 +73,7 @@ func (s *UserDbStore) GetById(id string) (*types.User, error) {
 		return nil, err
 	}
 	var user types.User
-	err := row.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+	err := row.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex, &user.AvatarUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +86,7 @@ func (s *UserDbStore) GetByEmail(email string) (*types.User, error) {
 		return nil, err
 	}
 	var user types.User
-	err := row.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+	err := row.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex, &user.AvatarUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +102,7 @@ func (s *UserDbStore) List(limit int) ([]*types.User, error) {
 	var users []*types.User
 	for rows.Next() {
 		var user types.User
-		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex, &user.AvatarUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -112,7 +119,7 @@ func (s *UserDbStore) GetUsersByIds(ids []string) ([]*types.User, error) {
 	placeholders := strings.Repeat("?,", len(ids))
 	placeholders = placeholders[:len(placeholders)-1] // 去掉末尾逗号
 	sql := fmt.Sprintf(`
-SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex
+SELECT id, email, name, password, is_valid, create_at, birth_at, update_at, sex, avatar_url
 FROM users WHERE id IN (%s)`, placeholders)
 
 	// 把 []string 展开为 []any
@@ -128,11 +135,32 @@ FROM users WHERE id IN (%s)`, placeholders)
 	var users []*types.User
 	for rows.Next() {
 		var user types.User
-		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex)
+		err := rows.Scan(&user.Id, &user.Email, &user.Name, &user.Password, &user.IsValid, &user.CreateAt, &user.BirthAt, &user.UpdateAt, &user.Sex, &user.AvatarUrl)
 		if err != nil {
 			return nil, err
 		}
 		users = append(users, &user)
 	}
 	return users, nil
+}
+
+func (s *UserDbStore) UpdateAvatarUrl(userId string, avatarUrl string) error {
+	_, err := s.db.Exec(UpdateAvatarUrlSql, avatarUrl, userId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *UserDbStore) GetAvatarUrl(userId string) (string, error) {
+	row := s.db.QueryRowContext(context.Background(), GetAvatarUrlSql, userId)
+	if err := row.Err(); err != nil {
+		return "", err
+	}
+	var avatarUrl string
+	err := row.Scan(&avatarUrl)
+	if err != nil {
+		return "", err
+	}
+	return avatarUrl, nil
 }

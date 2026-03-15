@@ -12,6 +12,7 @@ import (
 	"github.com/TheChosenGay/aichat/gateway/ws"
 	"github.com/TheChosenGay/aichat/service"
 	"github.com/TheChosenGay/aichat/store"
+	"github.com/TheChosenGay/aichat/store/cos"
 	"github.com/joho/godotenv"
 )
 
@@ -47,13 +48,19 @@ func main() {
 	msgStore := store.NewMessageDbStore(db)
 	roomStore := store.NewRoomDbStore(db)
 
-	relationDbStore := store.NewRelationshipDbStore(db)
-	relationSrv := service.NewRelationshipService(relationDbStore)
+	cosClient := cos.NewClient(
+		os.Getenv("COS_BUCKET"),
+		os.Getenv("COS_REGION"),
+		os.Getenv("COS_SECRET_ID"),
+		os.Getenv("COS_SECRET_KEY"),
+	)
 
 	connManager := gateway.NewConnManager()
-	userSrv := service.NewUserService(userDbStore, userRedisStore, connManager)
+	userSrv := service.NewUserService(userDbStore, userRedisStore, connManager, cosClient)
 	roomSrv := service.NewRoomService(roomStore, userDbStore)
 
+	relationDbStore := store.NewRelationshipDbStore(db)
+	relationSrv := service.NewRelationshipService(relationDbStore, userSrv)
 	apiServer := api.NewServer(
 		&api.ServerOpt{
 			ListenPort: userServicePort,

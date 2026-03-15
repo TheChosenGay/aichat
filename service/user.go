@@ -1,12 +1,16 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/TheChosenGay/aichat/store"
+	"github.com/TheChosenGay/aichat/store/cos"
 	"github.com/TheChosenGay/aichat/types"
 	"github.com/TheChosenGay/aichat/utils"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,13 +28,18 @@ type UserService interface {
 	ListUsers(limit int) ([]*types.User, error)
 	SetOnlineStatus(userId string, online bool) error
 	GetOnlineStatus(userId string) (bool, error)
+
+	UpdateAvatarUrl(userId string, avatarUrl string) error
+	GetAvatarUrl(userId string) (string, error)
+	GetPresignUploadUrl(userId string) (uploadUrl string, accessUrl string, err error)
 }
 
-func NewUserService(dbStore store.UserStore, redisStore *store.UserRedisStore, sessionCleaner SessionCleaner) UserService {
+func NewUserService(dbStore store.UserStore, redisStore *store.UserRedisStore, sessionCleaner SessionCleaner, cosClient *cos.Client) UserService {
 	return &defaultUserService{
 		dbStore:        dbStore,
 		redisStore:     redisStore,
 		sessionCleaner: sessionCleaner,
+		cosClient:      cosClient,
 	}
 }
 
@@ -38,6 +47,7 @@ type defaultUserService struct {
 	dbStore        store.UserStore
 	redisStore     *store.UserRedisStore
 	sessionCleaner SessionCleaner
+	cosClient      *cos.Client
 }
 
 func (s *defaultUserService) CreateUser(user *types.User) error {
@@ -134,4 +144,34 @@ func (s *defaultUserService) SetOnlineStatus(userId string, online bool) error {
 
 func (s *defaultUserService) GetOnlineStatus(userId string) (bool, error) {
 	return s.redisStore.GetOnlineStatus(userId)
+}
+
+func (s *defaultUserService) UpdateAvatarUrl(userId string, avatarUrl string) error {
+	if avatarUrl == "" {
+		return errors.New("avatarUrl is required")
+	}
+	return s.dbStore.UpdateAvatarUrl(userId, avatarUrl)
+}
+
+func (s *defaultUserService) GetAvatarUrl(userId string) (string, error) {
+	avatarUrl, err := s.dbStore.GetAvatarUrl(userId)
+	if err != nil {
+		return "", err
+	}
+	if avatarUrl == "" {
+		// default ulr
+		avatarUrl = ""
+	}
+	return avatarUrl, nil
+}
+
+// MARK - COS
+
+func (s *defaultUserService) GetPresignUploadUrl(userId string) (uploadUrl string, accessUrl string, err error) {
+	objectKey := fmt.Sprintf("avatar/%s/%s", userId, uuid.New().String())
+	uploadUrl, accessUrl, err = s.cosClient.PresignUpload(context.Background(), objectKey)
+	if err != nil {
+		return "", "", err
+	}
+	return uploadUrl, accessUrl, nil
 }
