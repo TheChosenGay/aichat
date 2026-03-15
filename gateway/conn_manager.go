@@ -32,6 +32,7 @@ func (c *ConnManager) RemoveConn(id string) error {
 	c.mx.Lock()
 	conn, ok := c.conns[id]
 	if !ok {
+		c.mx.Unlock()
 		return errors.New("conn not found")
 	}
 	delete(c.conns, id)
