@@ -31,6 +31,9 @@ const DeleteRelationshipSql = `
 DELETE FROM friend_relationships
 WHERE user_id = ? AND friend_id = ?
 `
+const IsFriendSql = `
+SELECT COUNT(*) FROM friend_relationships WHERE user_id = ? AND friend_id = ?
+`
 
 // MARK: - Friend Request Sql
 const InsertFriendRequestSql = `
@@ -94,6 +97,19 @@ func (s *RelationshipDbStore) GetRelationshipsByUserId(user_id string, create_at
 	return relationships, nil
 }
 
+func (s *RelationshipDbStore) IsFriend(user_id string, friend_id string) (bool, error) {
+	row := s.db.QueryRow(IsFriendSql, user_id, friend_id)
+	if err := row.Err(); err != nil {
+		return false, err
+	}
+	var count int
+	err := row.Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (s *RelationshipDbStore) UpdateRelationshipNickName(user_id string, friend_id string, nick_name string) error {
 	_, err := s.db.Exec(UpdateRelationshipNickNameSql, nick_name, user_id, friend_id)
 	if err != nil {
@@ -143,7 +159,7 @@ func (f *RelationshipDbStore) GetRequestsByUserId(userId string, createAt int64,
 	return requests, nil
 }
 
-func (f *RelationshipDbStore) AcceptRequest(userId string, reqUserId string) error {
+func (f *RelationshipDbStore) AcceptRequest(userId string, reqUserId string, nickName string) error {
 	tx, err := f.db.Begin()
 	if err != nil {
 		return err
@@ -158,11 +174,11 @@ func (f *RelationshipDbStore) AcceptRequest(userId string, reqUserId string) err
 
 	now := time.Now().Unix()
 	// 2. 双向插入好友关系
-	_, err = tx.Exec(InsertRelationshipSql, userId, reqUserId, "", now)
+	_, err = tx.Exec(InsertRelationshipSql, userId, reqUserId, nickName, now)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(InsertRelationshipSql, reqUserId, userId, "", now)
+	_, err = tx.Exec(InsertRelationshipSql, reqUserId, userId, nickName, now)
 	if err != nil {
 		return err
 	}

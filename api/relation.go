@@ -98,6 +98,7 @@ func (s *RelationServer) createRelationHandler(w http.ResponseWriter, r *http.Re
 func (s *RelationServer) listRelationHandler(w http.ResponseWriter, r *http.Request) {
 	userId := r.Context().Value(middleware.UserIdKey).(string)
 	cookie, limit, err := getCookieAndLimit(r, "cookie", "limit", 20)
+	slog.Info("listRelationHandler", "cookie", cookie, "limit", limit)
 	if err != nil {
 		BadRequest(w, err.Error())
 		return
@@ -118,6 +119,7 @@ func (s *RelationServer) listRelationHandler(w http.ResponseWriter, r *http.Requ
 		Cookie:    cookie,
 		IsEnd:     len(relations) < limit || len(relations) == 0,
 	}
+	slog.Info("listRelationHandler", "response", response)
 
 	OK(w, response)
 }
@@ -165,6 +167,17 @@ func (s *RelationServer) createFriendRequestHandler(w http.ResponseWriter, r *ht
 		BadRequest(w, "invalid friendId")
 		return
 	}
+
+	isFriend, err := s.relationService.IsFriend(userId, friendId)
+	if err != nil {
+		InternalError(w, err.Error())
+		return
+	}
+	if isFriend {
+		BadRequest(w, "you are already friends")
+		return
+	}
+
 	if err := s.relationService.CreateFriendRequest(userId, friendId); err != nil {
 		InternalError(w, err.Error())
 		return
@@ -194,6 +207,7 @@ func (s *RelationServer) acceptFriendRequestHandler(w http.ResponseWriter, r *ht
 		return
 	}
 	if err := s.relationService.AcceptFriendRequest(userId, friendId); err != nil {
+		slog.Error("acceptFriendRequestHandler", "error", err.Error())
 		InternalError(w, err.Error())
 		return
 	}

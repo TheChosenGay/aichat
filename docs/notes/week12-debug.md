@@ -170,7 +170,70 @@ OnMsgRetry: func(msg *types.Message) error {
 
 ---
 
-## 七、后续改进建议
+## 七、问题 N：ConnManager.RemoveConn 死锁（加锁后所有返回路径必须解锁）
+
+### 问题描述
+
+`ConnManager.RemoveConn` 加锁后，在 `!ok`（连接不存在）的提前返回分支忘记解锁，
+后续任何调用该锁的代码全部阻塞，造成死锁。
+
+### 根因
+
+```go
+// ❌ 错误：!ok 分支直接 return，忘记 Unlock
+func (m *ConnManager) RemoveConn(id string) {
+    m.mx.Lock()
+    _, ok := m.conns[id]
+    if !ok {
+        return  // 锁没释放！后续所有 Lock() 永远阻塞
+    }
+    delete(m.conns, id)
+    m.mx.Unlock()
+}
+```
+
+### 解决方案
+
+**方法一：每个提前返回前都手动 Unlock**
+
+```go
+func (m *ConnManager) RemoveConn(id string) {
+    m.mx.Lock()
+    _, ok := m.conns[id]
+    if !ok {
+        m.mx.Unlock()  // ✅ 每个 return 前都解锁
+        return
+    }
+    delete(m.conns, id)
+    m.mx.Unlock()
+}
+```
+
+**方法二（推荐）：加锁后立即 defer Unlock，彻底消灭漏解锁**
+
+```go
+func (m *ConnManager) RemoveConn(id string) {
+    m.mx.Lock()
+    defer m.mx.Unlock()  // ✅ 函数任何路径退出都会执行
+
+    _, ok := m.conns[id]
+    if !ok {
+        return  // defer 保证这里也会 Unlock
+    }
+    delete(m.conns, id)
+}
+```
+
+### 经验总结
+
+> **规则：加锁后，立即写 `defer Unlock()`。不要在函数末尾手动 Unlock，因为任何提前 return 都会漏掉它。**
+
+- 只有一种例外：需要在 Unlock 后才能调用回调/外部函数时（避免锁内回调死锁），才手动控制 Unlock 时机（见问题 1）
+- 其余情况一律 `defer Unlock()`，不给自己留漏洞
+
+---
+
+## 八、后续改进建议
 
 1. **避免回调嵌套**：Pender 的回调设计容易造成死锁，考虑用 channel 替代
 2. **统一错误日志**：Save、Route 等关键方法加错误日志

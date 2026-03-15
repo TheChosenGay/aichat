@@ -15,6 +15,7 @@ type SessionCleaner interface {
 }
 
 type UserService interface {
+	GetById(userId string) (*types.User, error)
 	CreateUser(*types.User) error
 	LoginByPassword(userId string, password string) (string, error)
 	LoginByEmail(email string, password string) (string, error)
@@ -110,6 +111,17 @@ func (s *defaultUserService) Logout(userId string) error {
 
 func (s *defaultUserService) DeleteUser(userId string) error {
 	return nil
+}
+
+func (s *defaultUserService) GetById(userId string) (*types.User, error) {
+	if userId == "" {
+		return nil, errors.New("userId is required")
+	}
+	user, err := s.redisStore.GetUser(userId)
+	if err == nil && user != nil {
+		return user, nil
+	}
+	return s.dbStore.GetById(userId)
 }
 
 func (s *defaultUserService) ListUsers(limit int) ([]*types.User, error) {

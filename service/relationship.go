@@ -11,6 +11,7 @@ type RelationshipService interface {
 	UpdateRelationshipNickName(user_id string, friend_id string, nick_name string) error
 	GetRelationship(user_id string, create_at int64, limit int) ([]*types.Relationship, error)
 	DeleteRelationship(user_id string, friend_id string) error
+	IsFriend(user_id string, friend_id string) (bool, error)
 
 	// friend request
 	CreateFriendRequest(user_id string, req_user_id string) error
@@ -23,12 +24,14 @@ type RelationshipService interface {
 type defaultRelationshipService struct {
 	relationshipDbStore  store.RelationshipStore
 	friendRequestDbStore store.FriendRequestStore
+	userService          UserService
 }
 
-func NewRelationshipService(relationshipDbStore *store.RelationshipDbStore) RelationshipService {
+func NewRelationshipService(relationshipDbStore *store.RelationshipDbStore, userService UserService) RelationshipService {
 	return &defaultRelationshipService{
 		relationshipDbStore:  relationshipDbStore,
 		friendRequestDbStore: relationshipDbStore,
+		userService:          userService,
 	}
 }
 
@@ -45,11 +48,20 @@ func (s *defaultRelationshipService) DeleteRelationship(user_id string, friend_i
 	return s.relationshipDbStore.DeleteRelationship(user_id, friend_id)
 }
 
+func (s *defaultRelationshipService) IsFriend(user_id string, friend_id string) (bool, error) {
+	return s.relationshipDbStore.IsFriend(user_id, friend_id)
+}
+
 func (s *defaultRelationshipService) CreateFriendRequest(user_id string, req_user_id string) error {
 	return s.friendRequestDbStore.CreateRequest(user_id, req_user_id)
 }
 func (s *defaultRelationshipService) AcceptFriendRequest(user_id string, req_user_id string) error {
-	return s.friendRequestDbStore.AcceptRequest(user_id, req_user_id)
+	user, err := s.userService.GetById(req_user_id)
+	if err != nil {
+		return err
+	}
+	nick_name := user.Name
+	return s.friendRequestDbStore.AcceptRequest(user_id, req_user_id, nick_name)
 }
 func (s *defaultRelationshipService) RejectFriendRequest(user_id string, req_user_id string) error {
 	return s.friendRequestDbStore.UpdateRequestStatus(user_id, req_user_id, types.RequestStatusRejected)
