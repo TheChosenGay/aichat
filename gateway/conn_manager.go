@@ -28,17 +28,11 @@ func (c *ConnManager) AddConn(conn Conn) error {
 	return nil
 }
 
+// remove 就是remove，不要做不必要的事情
 func (c *ConnManager) RemoveConn(id string) error {
 	c.mx.Lock()
-	conn, ok := c.conns[id]
-	if !ok {
-		c.mx.Unlock()
-		return errors.New("conn not found")
-	}
+	defer c.mx.Unlock()
 	delete(c.conns, id)
-	c.mx.Unlock()
-
-	conn.Close()
 	return nil
 }
 
@@ -94,4 +88,13 @@ func (c *ConnManager) RouteGroup(message *types.Message, memberIds []string) err
 		})
 	}
 	return g.Wait()
+}
+
+// MARK: - Session Cleaner
+func (c *ConnManager) Clean(userId string) error {
+	conn, err := c.GetConn(userId)
+	if err != nil {
+		return err
+	}
+	return conn.Close() // 注意锁的粒度问题
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/TheChosenGay/aichat/gateway"
 	"github.com/TheChosenGay/aichat/middleware"
 	"github.com/TheChosenGay/aichat/service"
+	"github.com/TheChosenGay/aichat/service/router"
 	"github.com/TheChosenGay/aichat/types"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
@@ -20,6 +21,7 @@ type WsServer struct {
 	ConnManager    *gateway.ConnManager
 	messageService *service.MessageService
 	userService    service.UserService
+	redisMsgRouter *router.RedisMsgRouter
 	validate       *validator.Validate
 }
 
@@ -27,9 +29,11 @@ func NewWsServer(
 	opt *gateway.ServerOpt,
 	connManager *gateway.ConnManager,
 	messageService *service.MessageService,
-	userService service.UserService) *WsServer {
+	userService service.UserService,
+	redisMsgRouter *router.RedisMsgRouter) *WsServer {
 	return &WsServer{
 		opt:            opt,
+		redisMsgRouter: redisMsgRouter,
 		messageService: messageService,
 		userService:    userService,
 		ConnManager:    connManager,
@@ -71,6 +75,10 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		func(id string) {
 			slog.Info("user connect", "id", id)
 			s.userService.SetOnlineStatus(id, true)
+			if err := s.redisMsgRouter.Subscribe(id); err != nil {
+				slog.Error("Failed to subscribe to redis", "error", err.Error())
+				return
+			}
 
 			go func() {
 				if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
@@ -81,11 +89,21 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 		},
 		func(id string) {
 			s.ConnManager.RemoveConn(id)
-			s.userService.SetOnlineStatus(id, false)
+			if err := s.userService.SetOnlineStatus(id, false); err != nil {
+				slog.Error("Failed to set online status", "error", err.Error())
+				return
+			}
+			if err := s.redisMsgRouter.Unsubscribe(id); err != nil {
+				slog.Error("Failed to unsubscribe from redis", "error", err.Error())
+				return
+			}
 		},
 		func(id string) {
 			// 收到pong，认为用户在线
-			s.userService.SetOnlineStatus(id, true)
+			if err := s.userService.SetOnlineStatus(id, true); err != nil {
+				slog.Error("Failed to set online status", "error", err.Error())
+				return
+			}
 		},
 		func(data []byte) {
 			//gorilla/websocket会处理分片，返回的data []byte已经是完整的了

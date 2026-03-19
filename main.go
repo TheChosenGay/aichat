@@ -11,6 +11,7 @@ import (
 	"github.com/TheChosenGay/aichat/gateway"
 	"github.com/TheChosenGay/aichat/gateway/ws"
 	"github.com/TheChosenGay/aichat/service"
+	"github.com/TheChosenGay/aichat/service/router"
 	"github.com/TheChosenGay/aichat/store"
 	"github.com/TheChosenGay/aichat/store/cos"
 	"github.com/joho/godotenv"
@@ -56,6 +57,7 @@ func main() {
 	)
 
 	connManager := gateway.NewConnManager()
+	redisMsgRouter := router.NewRedisMsgRouter(connManager, userRedisStore)
 	userSrv := service.NewUserService(userDbStore, userRedisStore, connManager, cosClient)
 	roomSrv := service.NewRoomService(roomStore, userDbStore)
 
@@ -75,10 +77,10 @@ func main() {
 	)
 
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
-	msgService := service.NewMessageService(msgStore, roomSrv, connManager, userSrv)
+	msgService := service.NewMessageService(msgStore, roomSrv, redisMsgRouter, userSrv)
 	wsServer := ws.NewWsServer(&gateway.ServerOpt{
 		ListenPort: wsServicePort,
-	}, connManager, msgService, userSrv)
+	}, connManager, msgService, userSrv, redisMsgRouter)
 
 	go func() {
 		if err := wsServer.Run(); err != nil {

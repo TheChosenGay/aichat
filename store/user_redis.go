@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strconv"
@@ -195,4 +196,32 @@ func (s *UserRedisStore) GetUser(userId string) (*types.User, error) {
 		Sex:      result["sex"] == "true",
 	}
 	return user, nil
+}
+
+// MARK -- Channel
+
+func (s *UserRedisStore) SubUser(userId string) *redis.PubSub {
+	userChannel := s.UserChannelName(userId)
+	return s.redis.Subscribe(context.Background(), userChannel)
+}
+
+func (s *UserRedisStore) Unsubscribe(pubsub *redis.PubSub) error {
+	return pubsub.Close()
+}
+
+func (s *UserRedisStore) Publish(userId string, data any) error {
+	userChannel := s.UserChannelName(userId)
+	json, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return s.redis.Publish(context.Background(), userChannel, json).Err()
+}
+
+func (s *UserRedisStore) UserChannelName(userId string) string {
+	return "user:" + userId
+}
+
+func (s *UserRedisStore) RoomChannelName(roomId string) string {
+	return "room:" + roomId
 }

@@ -15,7 +15,7 @@ import (
 )
 
 type SessionCleaner interface {
-	RemoveConn(userId string) error
+	Clean(userId string) error
 }
 
 type UserService interface {
@@ -113,7 +113,7 @@ func (s *defaultUserService) Logout(userId string) error {
 	}
 
 	// 清楚session 信息
-	if err := s.sessionCleaner.RemoveConn(user.Id); err != nil {
+	if err := s.sessionCleaner.Clean(user.Id); err != nil {
 		return err
 	}
 	return nil

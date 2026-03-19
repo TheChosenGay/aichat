@@ -33,7 +33,7 @@ type WsConn struct {
 
 var _ gateway.Conn = (*WsConn)(nil)
 
-func NewWsConn(id string, conn *websocket.Conn, onConnect gateway.ConnConnectCallback, onPong gateway.ConnPongCallback, onClose gateway.ConnCloseCallback, onMessage gateway.ConnMessageCallback) *WsConn {
+func NewWsConn(id string, conn *websocket.Conn, onConnect gateway.ConnConnectCallback, onClose gateway.ConnCloseCallback, onPong gateway.ConnPongCallback, onMessage gateway.ConnMessageCallback) *WsConn {
 	return &WsConn{
 		id:        id,
 		onConnect: onConnect,
