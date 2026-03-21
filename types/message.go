@@ -7,8 +7,9 @@ const (
 	MessageTypeImage
 	MessageTypeAudio
 	MessageTypeSystem
-	MessageTypeAck    // ACK 消息类型
-	MessageTypeFailed // 消息发送失败类型
+	MessageTypeAck                // ACK 消息类型
+	MessageTypeFailed             // 消息发送失败类型
+	MessageTypeConversationUpdate // 会话更新类型
 )
 
 type Message struct {

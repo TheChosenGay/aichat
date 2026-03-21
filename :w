@@ -8,7 +8,6 @@ import (
 
 	"github.com/TheChosenGay/aichat/store"
 	"github.com/TheChosenGay/aichat/types"
-	"github.com/google/uuid"
 )
 
 type MessagePendOpts struct {
@@ -190,7 +189,7 @@ func (s *MessageService) SendMessage(message *types.Message) error {
 		}
 
 		if message.RoomId != "" {
-			// 群消息暂时不支持重试
+			// 群消息暂时支持重试
 			return s.sendGroupMessage(message)
 		}
 	}
@@ -237,7 +236,7 @@ func (s *MessageService) sendGroupMessage(message *types.Message) error {
 		go func() {
 			var unreadCnt int = 1
 			if member.Id == message.FromId {
-				unreadCnt = 0
+				
 			}
 			s.updateConversation(member.Id, message.RoomId, true, message, unreadCnt)
 		}()
@@ -256,7 +255,7 @@ func (s *MessageService) FetchHistoryMessages(toId string, limit int, currentTim
 	return nil
 }
 
-func (s *MessageService) updateConversation(userId, peerId string, isGroup bool, message *types.Message, unreadCnt int) error {
+func (s *MessageService) updateConversation(userId, peerId string, isGroup bool, message *types.Message, unreaCnt int) error {
 	var conversation *types.Conversation
 	var err error
 	if !isGroup {
@@ -268,46 +267,16 @@ func (s *MessageService) updateConversation(userId, peerId string, isGroup bool,
 		return err
 	}
 	if conversation == nil {
-		// 会话不存在则自动创建（如直接发消息未提前 open）
-		var convPeerId, convRoomId string
-		if isGroup {
-			convRoomId = peerId // updateConversation 里群聊时 peerId 参数传的是 roomId
-		} else {
-			convPeerId = peerId
-		}
-		conversation, err = s.conversationService.CreateConversation(userId, convPeerId, convRoomId)
-		if err != nil {
-			return err
-		}
+		return errors.New("conversation not found")
 	}
 	if conversation.LastMsgId == message.MsgId {
 		// 防重入
 		return nil
 	}
-	user, err := s.userService.GetById(message.FromId)
-	if err != nil {
-		return err
-	}
 
 	conversation.LastMsgId = message.MsgId
 	conversation.LastMsgTime = message.SendAt
 	conversation.LastMsgContent = message.Content
-	conversation.LastSenderName = user.Name
-	conversation.UnreadCount = unreadCnt
-	if err := s.conversationService.UpdateConversation(conversation); err != nil {
-		return err
-	}
-
-	msg := &types.Message{
-		MsgId:   uuid.New().String(),
-		FromId:  peerId,
-		ToId:    userId,
-		Content: "已读",
-		Type:    types.MessageTypeConversationUpdate,
-		SendAt:  time.Now().Unix(),
-	}
-
-	// 发送会话更新消息
-	s.router.Route(msg)
-	return nil
+	conversation.UnreadCount = unreaCnt
+	return s.conversationService.UpdateConversation(conversation)
 }

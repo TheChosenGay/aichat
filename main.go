@@ -61,6 +61,9 @@ func main() {
 	userSrv := service.NewUserService(userDbStore, userRedisStore, connManager, cosClient)
 	roomSrv := service.NewRoomService(roomStore, userDbStore)
 
+	conversationDbStore := store.NewConversationDbStore(db)
+	conversationSrv := service.NewConversationService(conversationDbStore, userSrv)
+
 	relationDbStore := store.NewRelationshipDbStore(db)
 	relationSrv := service.NewRelationshipService(relationDbStore, userSrv)
 	apiServer := api.NewServer(
@@ -74,10 +77,11 @@ func main() {
 		api.NewRelationServer(api.RelationServerOpt{
 			ListenPort: userServicePort,
 		}, relationSrv),
+		api.NewConversationServer(conversationSrv),
 	)
 
 	wsServicePort := os.Getenv("GATEWAY_SERVICE_LISTEN_PORT")
-	msgService := service.NewMessageService(msgStore, roomSrv, redisMsgRouter, userSrv)
+	msgService := service.NewMessageService(msgStore, roomSrv, conversationSrv, redisMsgRouter, userSrv)
 	wsServer := ws.NewWsServer(&gateway.ServerOpt{
 		ListenPort: wsServicePort,
 	}, connManager, msgService, userSrv, redisMsgRouter)

@@ -22,6 +22,7 @@ const (
 	ErrUserUpdateAvatarUrl     ErrorOptType = "user update avatar url"
 	ErrUserGetAvatarUrl        ErrorOptType = "user get avatar url"
 	ErrUserPresignUploadAvatar ErrorOptType = "user presign upload avatar"
+	ErrUserGetUserInfo         ErrorOptType = "user get user info"
 )
 
 var (

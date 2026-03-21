@@ -73,6 +73,7 @@ func (u *UserServer) RegisterHandler(mx *mux.Router) {
 	mx.HandleFunc("/user/login", u.loginHandler).Methods("POST")
 	mx.HandleFunc("/user/logout", middleware.JwtMiddleware(u.logoutHandler)).Methods("POST")
 	mx.HandleFunc("/user/list/{limit}", u.listUserHandler).Methods("GET")
+	mx.HandleFunc("/user/info/{userId}", middleware.JwtMiddleware(u.getUserInfoHandler)).Methods("GET")
 
 	// Avatar
 	mx.HandleFunc("/user/avatar/update", middleware.JwtMiddleware(u.updateAvatarUrlHandler)).Methods("POST")
@@ -210,4 +211,21 @@ func (u *UserServer) presignUploadAvatarHandler(w http.ResponseWriter, r *http.R
 		UploadUrl: uploadUrl,
 		AccessUrl: accessUrl,
 	})
+}
+
+func (u *UserServer) getUserInfoHandler(w http.ResponseWriter, r *http.Request) {
+	userId := mux.Vars(r)["userId"]
+	if uuid.Validate(userId) != nil {
+		BadRequest(w, service.NewError(service.ErrServiceUser, service.ErrUserGetUserInfo, service.ErrParamInvalid).Error())
+		slog.Error("invalid user id", "userId", userId)
+		return
+	}
+	user, err := u.userService.GetById(userId)
+	if err != nil {
+		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserGetUserInfo, err).Error())
+		slog.Error("failed to get user info", "userId", userId, "error", err.Error())
+		return
+	}
+	slog.Info("get user info", "userId", userId, "user", user)
+	OK(w, user)
 }
