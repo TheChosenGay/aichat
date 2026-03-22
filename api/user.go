@@ -10,6 +10,7 @@ import (
 	"github.com/TheChosenGay/aichat/middleware"
 	"github.com/TheChosenGay/aichat/service"
 	"github.com/TheChosenGay/aichat/types"
+	"github.com/TheChosenGay/aichat/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -133,9 +134,15 @@ func (u *UserServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, err).Error())
 		return
 	}
+	userId, err := utils.VerifyJwt(jwtToken)
+	if err != nil {
+		InternalError(w, service.NewError(service.ErrServiceUser, service.ErrUserLogin, err).Error())
+		return
+	}
 
 	OK(w, map[string]any{
 		"jwtToken": jwtToken,
+		"userId":   userId,
 	})
 }
 

@@ -161,7 +161,18 @@ func NewMessageService(messageStore store.MessageStore, roomService RoomService,
 		OnMsgAcked: func(msg *types.Message) error {
 			msg.IsDelivered = true
 			slog.Info("message acked", "message", msg)
-			return m.messageStore.Update(msg)
+			if err := m.messageStore.Update(msg); err != nil {
+				return err
+			}
+			// 通知发送方：接收方已收到
+			ackMsg := &types.Message{
+				MsgId:  msg.MsgId,  // 原消息 id，发送方用来匹配
+				FromId: msg.ToId,   // 接收方
+				ToId:   msg.FromId, // 发给发送方
+				Type:   types.MessageTypeAck,
+				SendAt: time.Now().Unix(),
+			}
+			return m.router.Route(ackMsg)
 		},
 
 		OnMsgRetry: func(msg *types.Message) error {
@@ -182,12 +193,24 @@ func (s *MessageService) SendMessage(message *types.Message) error {
 	if message.ToId == "" && message.RoomId == "" {
 		return errors.New("to_id or room_id is required")
 	}
-	if message.Type != types.MessageTypeFailed && message.Type != types.MessageTypeAck && message.Type != types.MessageTypeConversationUpdate {
+	if message.Type != types.MessageTypeFailed && message.Type != types.MessageTypeAck && message.Type != types.MessageTypeConversationUpdate && message.Type != types.MessageTypeSent {
 		// 保存消息
+		message.ChannelId = s.getChannelId(message)
 		if err := s.messageStore.Save(message); err != nil {
 			slog.Error("save message failed", "error", err)
 			return err
 		}
+
+		// 立即回 Sent 确认给发送方，告知服务端已收到并保存
+		sentMsg := &types.Message{
+			MsgId:       message.MsgId,
+			ClientMsgId: message.ClientMsgId,
+			FromId:      message.ToId,
+			ToId:        message.FromId,
+			Type:        types.MessageTypeSent,
+			SendAt:      message.SendAt,
+		}
+		s.router.Route(sentMsg)
 
 		if message.RoomId != "" {
 			// 群消息暂时不支持重试
@@ -245,15 +268,8 @@ func (s *MessageService) sendGroupMessage(message *types.Message) error {
 	return s.router.RouteGroup(message, memberIds)
 }
 
-func (s *MessageService) FetchHistoryMessages(toId string, limit int, currentTime int64) error {
-	messages, err := s.messageStore.FetchHistoryMessages(toId, currentTime, limit)
-	if err != nil {
-		return err
-	}
-	for _, message := range messages {
-		s.router.Route(message)
-	}
-	return nil
+func (s *MessageService) FetchChannelHistoryMessages(channelId string, limit int, currentTime int64) ([]*types.Message, error) {
+	return s.messageStore.FetchChannelHistoryMessages(channelId, currentTime, limit)
 }
 
 func (s *MessageService) updateConversation(userId, peerId string, isGroup bool, message *types.Message, unreadCnt int) error {
@@ -294,20 +310,29 @@ func (s *MessageService) updateConversation(userId, peerId string, isGroup bool,
 	conversation.LastMsgContent = message.Content
 	conversation.LastSenderName = user.Name
 	conversation.UnreadCount = unreadCnt
+	conversation.ChannelId = message.ChannelId
 	if err := s.conversationService.UpdateConversation(conversation); err != nil {
 		return err
 	}
 
 	msg := &types.Message{
-		MsgId:   uuid.New().String(),
-		FromId:  peerId,
-		ToId:    userId,
-		Content: "已读",
-		Type:    types.MessageTypeConversationUpdate,
-		SendAt:  time.Now().Unix(),
+		MsgId:     uuid.New().String(),
+		FromId:    peerId,
+		ChannelId: conversation.ChannelId,
+		ToId:      userId,
+		Content:   "已读",
+		Type:      types.MessageTypeConversationUpdate,
+		SendAt:    time.Now().Unix(),
 	}
 
 	// 发送会话更新消息
 	s.router.Route(msg)
 	return nil
+}
+
+func (s *MessageService) getChannelId(message *types.Message) string {
+	if message.RoomId != "" {
+		return types.CalcRoomChannelId(message.RoomId)
+	}
+	return types.CalcChannelId(message.FromId, message.ToId)
 }

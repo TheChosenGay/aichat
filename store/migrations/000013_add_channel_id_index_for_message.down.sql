@@ -1,0 +1,1 @@
+ALTER TABLE messages DROP INDEX channel_id_send_at_idx;

@@ -1,0 +1,1 @@
+ALTER TABLE messages ADD INDEX channel_id_send_at_idx (channel_id, send_at DESC);

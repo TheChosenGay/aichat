@@ -1,0 +1,1 @@
+ALTER TABLE messages ADD COLUMN channel_id VARCHAR(32) NOT NULL DEFAULT '';

@@ -9,8 +9,8 @@ import (
 )
 
 const InsertConversationSql = `
-INSERT INTO conversations (cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO conversations (cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count, channel_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON DUPLICATE KEY UPDATE
 last_msg_time    = VALUES(last_msg_time),
 last_msg_content = VALUES(last_msg_content),
@@ -18,25 +18,25 @@ last_sender_name = VALUES(last_sender_name),
 unread_count     = unread_count + VALUES(unread_count)
 `
 const GetConversationById = `
-SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count
+SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count, channel_id
 FROM conversations
 WHERE cid = ?
 `
 const GetConversationByUserId = `
-SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count
+SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count, channel_id
 FROM conversations
 WHERE user_id = ? AND last_msg_time < ?
 ORDER BY last_msg_time DESC
 LIMIT ?
 `
 const GetConversationByUserIdAndPeerId = `
-SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count
+SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count, channel_id
 FROM conversations
 WHERE user_id = ? AND peer_id = ?
 `
 
 const GetConversationByUserIdAndRoomId = `
-SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count
+SELECT cid, user_id, peer_id, room_id, last_msg_time, last_msg_content, last_sender_name, unread_count, channel_id
 FROM conversations
 WHERE user_id = ? AND room_id = ?
 `
@@ -68,6 +68,7 @@ func scanConversation(s scanner) (*types.Conversation, error) {
 		&lastMsgContent,
 		&lastSenderName,
 		&conversation.UnreadCount,
+		&conversation.ChannelId,
 	)
 	if err != nil {
 		return nil, err
@@ -92,6 +93,7 @@ func (s *ConversationDbStore) InsertOrUpdate(conversation *types.Conversation) e
 		conversation.LastMsgContent,
 		conversation.LastSenderName,
 		conversation.UnreadCount,
+		conversation.ChannelId,
 	)
 	return err
 }

@@ -27,11 +27,18 @@ func NewConversationService(conversationDbStore *store.ConversationDbStore, user
 }
 
 func (s *defaultConversationService) CreateConversation(userId, peerId, roomId string) (*types.Conversation, error) {
+	var channelId string
+	if roomId != "" {
+		channelId = types.CalcRoomChannelId(roomId)
+	} else {
+		channelId = types.CalcChannelId(userId, peerId)
+	}
 	conversation := &types.Conversation{
-		CId:    uuid.New().String(),
-		UserId: userId,
-		PeerId: peerId,
-		RoomId: roomId,
+		CId:       uuid.New().String(),
+		UserId:    userId,
+		PeerId:    peerId,
+		RoomId:    roomId,
+		ChannelId: channelId,
 	}
 	if err := s.conversationDbStore.InsertOrUpdate(conversation); err != nil {
 		return nil, err

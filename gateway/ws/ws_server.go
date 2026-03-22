@@ -11,6 +11,7 @@ import (
 	"github.com/TheChosenGay/aichat/service"
 	"github.com/TheChosenGay/aichat/service/router"
 	"github.com/TheChosenGay/aichat/types"
+	"github.com/google/uuid"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 )
@@ -80,12 +81,13 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			go func() {
-				if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
-					slog.Error("Failed to fetch history messages", "error", err.Error())
-					return
-				}
-			}()
+			// 用户连接上来立马推送用户所有信息是不对的，应该提供一个api，供客户端自己拉取
+			// go func() {
+			// 	if err := s.messageService.FetchHistoryMessages(id, 20, time.Now().Unix()); err != nil {
+			// 		slog.Error("Failed to fetch history messages", "error", err.Error())
+			// 		return
+			// 	}
+			// }()
 		},
 		func(id string) {
 			s.ConnManager.RemoveConn(id)
@@ -114,6 +116,8 @@ func (s *WsServer) handleWs(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// 服务端生成 msg_id，覆盖客户端传来的值
+			message.MsgId = uuid.New().String()
 			message.FromId = id
 			message.SendAt = time.Now().Unix()
 

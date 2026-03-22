@@ -9,11 +9,11 @@ import (
 )
 
 const InsertMessageSql = `
-INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO messages (msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id, channel_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 const ListMessagesByToIdSql = `
-SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id
+SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id, channel_id
 FROM messages
 WHERE to_id = ? AND send_at < ?
 ORDER BY send_at DESC
@@ -23,10 +23,10 @@ const UpdateMessageSql = `
 UPDATE messages SET is_delivered = ? WHERE msg_id = ?
 `
 
-const FetchHistoryMessagesSql = `
-SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id
+const FetchChannelHistoryMessagesSql = `
+SELECT msg_id, from_id, to_id, type, content, send_at, is_delivered, room_id, channel_id
 FROM messages
-WHERE to_id = ?
+WHERE channel_id = ?
 	AND send_at <= ?
 ORDER BY send_at DESC 
 LIMIT ?
@@ -43,7 +43,7 @@ func NewMessageDbStore(db *sql.DB) *MessageDbStore {
 }
 
 func (m *MessageDbStore) Save(message *types.Message) error {
-	result, err := m.db.Exec(InsertMessageSql, message.MsgId, message.FromId, message.ToId, message.Type, message.Content, message.SendAt, message.IsDelivered, message.RoomId)
+	result, err := m.db.Exec(InsertMessageSql, message.MsgId, message.FromId, message.ToId, message.Type, message.Content, message.SendAt, message.IsDelivered, message.RoomId, message.ChannelId)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (m *MessageDbStore) ListByToId(toId string, before int64, limit int) ([]*ty
 	var messages []*types.Message
 	for rows.Next() {
 		var message types.Message
-		err := rows.Scan(&message.MsgId, &message.FromId, &message.ToId, &message.Type, &message.Content, &message.SendAt, &message.IsDelivered, &message.RoomId)
+		err := rows.Scan(&message.MsgId, &message.FromId, &message.ToId, &message.Type, &message.Content, &message.SendAt, &message.IsDelivered, &message.RoomId, &message.ChannelId)
 		if err != nil {
 			return nil, err
 		}
@@ -91,8 +91,8 @@ func (m *MessageDbStore) Update(message *types.Message) error {
 	return nil
 }
 
-func (m *MessageDbStore) FetchHistoryMessages(toId string, before int64, limit int) ([]*types.Message, error) {
-	rows, err := m.db.QueryContext(context.Background(), FetchHistoryMessagesSql, toId, before, limit)
+func (m *MessageDbStore) FetchChannelHistoryMessages(channelId string, before int64, limit int) ([]*types.Message, error) {
+	rows, err := m.db.QueryContext(context.Background(), FetchChannelHistoryMessagesSql, channelId, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,8 @@ func (m *MessageDbStore) FetchHistoryMessages(toId string, before int64, limit i
 			&message.Content,
 			&message.SendAt,
 			&message.IsDelivered,
-			&roomId); err != nil {
+			&roomId,
+			&message.ChannelId); err != nil {
 			return nil, err
 		}
 		if roomId.Valid {
